@@ -45,6 +45,10 @@ The full measure → reason → generate → critique loop runs in under a minut
 
 `raw_score` vs `ui_score` matters (we display consumer-calibrated scores but reason over raw ones); VTO cost/latency (2 units, ~15 s) is low enough for a "try everything you see" habit loop; and an LLM judge with a strict schema + a "be honest, a skip builds trust" prompt produces retail-grade advice.
 
+### Expo mobile app
+
+The repo also ships a working **React Native (Expo) version** in `mobile/` — the same twin + skin brief + screenshot try-on + verdict loop on iOS/Android, against the same server. (Add to the description if there's room, and mention it in the video comments.)
+
 ### What's next
 
 Browser-extension capture (right-click → try it on), makeup transfer from the same screenshot, Face Tone Analysis for seasonal color typing, wardrobe memory ("pair it with things I own"), and shoes/bags via the other YouCam VTO endpoints.

@@ -1,0 +1,37 @@
+{
+  "expo": {
+    "name": "Anywear",
+    "slug": "anywear",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "ios": {
+      "supportsTablet": true,
+      "infoPlist": {
+        "NSPhotoLibraryUsageDescription": "Anywear needs your photo library to pick your full-body photo, selfie, and fashion screenshots."
+      }
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#E6F4FE",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "predictiveBackGestureEnabled": false
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "scheme": "anywear",
+    "plugins": [
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Anywear picks your photos and fashion screenshots for virtual try-on."
+        }
+      ]
+    ]
+  }
+}

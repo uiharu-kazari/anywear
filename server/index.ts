@@ -149,7 +149,23 @@ app.get('/api/image-proxy', async (c) => {
   return c.body(await res.arrayBuffer());
 });
 
-// --- Static (production) -------------------------------------------------
+// Demo sample images as base64 (the Expo app consumes these).
+app.get('/api/sample/:name', async (c) => {
+  const name = c.req.param('name');
+  if (!/^[a-z_]+\.(png|jpg)$/.test(name)) return c.json({ error: 'unknown sample' }, 400);
+  const { readFile } = await import('node:fs/promises');
+  try {
+    const buf = await readFile(`./public/samples/${name}`);
+    return c.json({ imageBase64: buf.toString('base64'), mime: name.endsWith('.png') ? 'image/png' : 'image/jpeg' });
+  } catch {
+    return c.json({ error: 'unknown sample' }, 404);
+  }
+});
+
+// --- Static ----------------------------------------------------------------
+
+// Demo sample assets are always served (the Expo app loads them from here).
+app.use('/samples/*', serveStatic({ root: './public' }));
 
 if (process.env.NODE_ENV === 'production') {
   app.use('*', serveStatic({ root: './dist' }));

@@ -64,6 +64,21 @@ npm run dev            # server :8931 + web :5173
 
 Open http://localhost:5173, click **"Step in with the demo persona"**, and you are in the fitting room. Production build: `npm run build && npm start`.
 
+## Expo mobile app
+
+`mobile/` contains a React Native (Expo SDK 57) version of the same product — twin + selfie setup, skin scores and daily brief, screenshot try-on with tappable garment detection boxes, hold-to-compare mirror, and the stylist verdict — talking to the same server.
+
+| Skin today + brief | Try-on + verdict |
+|---|---|
+| <img src="docs/screenshots/05-mobile-skin.png" width="260"> | <img src="docs/screenshots/06-mobile-verdict.png" width="260"> |
+
+```bash
+cd mobile && npm install
+EXPO_PUBLIC_API_BASE_URL=http://<your-lan-ip>:8931 npx expo start
+```
+
+Scan the QR with Expo Go (on the iOS simulator, `http://localhost:8931` works as-is). `EXPO_PUBLIC_AUTODEMO=1` makes the app walk the whole demo unattended — handy for screenshots and CI.
+
 ## Demo assets
 
 All demo people and garments in `public/samples/` are AI-generated (Gemini image models) specifically for this project — no third-party photography, trademarks, or copyrighted material.
