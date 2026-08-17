@@ -216,7 +216,11 @@ export const useStore = create<AnywearState>()(
             occasion,
             verdict,
           };
-          set((s) => ({ lookbook: [entry, ...s.lookbook].slice(0, 10) }));
+          // Re-judging the same look (e.g. occasion change) updates its entry
+          // instead of appending a duplicate.
+          set((s) => ({
+            lookbook: [entry, ...s.lookbook.filter((e) => e.result !== resultSmall)].slice(0, 10),
+          }));
         } catch {
           set({ verdictStatus: 'error' });
           // Still keep the look in the book, just without a verdict.

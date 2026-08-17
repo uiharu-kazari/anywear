@@ -54,13 +54,13 @@ export default function Studio() {
         </div>
       </header>
 
-      <main className="mx-auto grid max-w-7xl gap-4 overflow-x-clip px-5 pb-8 lg:grid-cols-[270px_minmax(0,1fr)_320px]">
+      <main className="mx-auto grid max-w-7xl gap-4 overflow-x-clip px-5 pb-8 lg:grid-cols-[270px_minmax(0,1fr)_320px] lg:items-start">
         <div className="order-2 flex flex-col gap-4 lg:order-1">
           <TwinPanel />
           <SkinPanel />
         </div>
 
-        <div className="order-1 lg:order-2">
+        <div className="order-1 lg:sticky lg:top-4 lg:order-2 lg:h-[calc(100dvh-110px)]">
           <MirrorStage />
         </div>
 
