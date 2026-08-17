@@ -68,9 +68,11 @@ Open http://localhost:5173, click **"Step in with the demo persona"**, and you a
 
 `mobile/` contains a React Native (Expo SDK 54) version of the same product — twin + selfie setup, skin scores and daily brief, screenshot try-on with tappable garment detection boxes, hold-to-compare mirror, and the stylist verdict — talking to the same server.
 
-| Skin today + brief | Try-on + verdict |
-|---|---|
-| <img src="docs/screenshots/05-mobile-skin.png" width="260"> | <img src="docs/screenshots/06-mobile-verdict.png" width="260"> |
+| Home | Skin today + brief | Try-on + verdict |
+|---|---|---|
+| <img src="docs/screenshots/07-mobile-home.png" width="230"> | <img src="docs/screenshots/05-mobile-skin.png" width="230"> | <img src="docs/screenshots/06-mobile-verdict.png" width="230"> |
+
+Waiting states are crafted, not spinners: a face-scan animation while Skin Analysis runs, a viewfinder sweep during garment detection, and a stitched-hanger "tailoring" card while the try-on generates — each with rotating captions tied to the actual work.
 
 ```bash
 cd mobile && npm install

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  Dimensions,
   Image,
   Pressable,
   ScrollView,
@@ -10,7 +11,9 @@ import {
   TextInput,
   View,
 } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
+import { DetectSweep, DETECT_LINES, RotatingCaption, SkinScanLoader, TailorLoader } from './src/components/Loaders';
 import {
   api,
   API,
@@ -35,10 +38,12 @@ const CONCERN_NAMES: Record<string, string> = {
 
 const OCCASIONS = ['a regular day out', 'the office', 'a first date', 'a night out'];
 const SAMPLES = [
-  { name: 'street_model.png', label: 'Street style' },
-  { name: 'garment_dress.png', label: 'Slip dress' },
-  { name: 'garment_jacket.png', label: 'Blazer' },
+  { name: 'street_model.png', label: 'Street style', img: require('./assets/street_model.jpg') },
+  { name: 'garment_dress.png', label: 'Slip dress', img: require('./assets/garment_dress.jpg') },
+  { name: 'garment_jacket.png', label: 'Blazer', img: require('./assets/garment_jacket.jpg') },
 ];
+const HERO = require('./assets/hero.jpg');
+const SCREEN_H = Dimensions.get('window').height;
 
 type Stage =
   | { phase: 'empty' }
@@ -76,7 +81,7 @@ export default function App() {
   }, [twin, selfie, skinStatus]);
   useEffect(() => {
     if (process.env.EXPO_PUBLIC_AUTODEMO !== '1') return;
-    if (stage.phase === 'done' || verdict) {
+    if (['detecting', 'running', 'done'].includes(stage.phase) || verdict) {
       const t = setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 700);
       return () => clearTimeout(t);
     }
@@ -195,24 +200,47 @@ export default function App() {
       <SafeAreaView style={styles.safe} edges={['top']}>
         <StatusBar barStyle="dark-content" />
         <ScrollView ref={scrollRef} contentContainerStyle={styles.scroll}>
-          <Text style={styles.brand}>
-            Any<Text style={styles.brandItalic}>wear</Text>
-          </Text>
-          <Text style={styles.tagline}>Screenshot it. Wear it. Styled for your skin — today.</Text>
-
-          {/* Setup */}
-          {!twin ? (
-            <View style={styles.card}>
-              <Text style={styles.tag}>step in</Text>
-              <Text style={styles.body}>
-                One full-body photo becomes your fitting-room twin. Add a selfie to read your skin.
+          {twin && (
+            <>
+              <Text style={styles.brand}>
+                Any<Text style={styles.brandItalic}>wear</Text>
               </Text>
-              <View style={styles.row}>
-                <Pressable style={styles.btnPrimary} onPress={loadDemoPersona}>
-                  <Text style={styles.btnPrimaryText}>Use demo persona</Text>
-                </Pressable>
+              <Text style={styles.tagline}>Screenshot it. Wear it. Styled for your skin — today.</Text>
+            </>
+          )}
+
+          {/* Welcome */}
+          {!twin ? (
+            <View style={styles.heroBleed}>
+              {/* Full-bleed hero: a real Anywear try-on as the opening image */}
+              <View style={[styles.hero, { height: Math.min(480, SCREEN_H * 0.52) }]}>
+                <Image source={HERO} style={styles.heroImg} resizeMode="cover" />
+                <LinearGradient
+                  colors={['rgba(246,244,241,0)', 'rgba(246,244,241,0.55)', colors.porcelain]}
+                  locations={[0.45, 0.78, 1]}
+                  style={StyleSheet.absoluteFill}
+                />
+                <View style={styles.heroContent}>
+                  <Text style={styles.tag}>your fitting room, everywhere</Text>
+                  <Text style={styles.heroBrand}>
+                    Any<Text style={styles.brandItalic}>wear</Text>
+                  </Text>
+                </View>
+              </View>
+
+              <View style={styles.heroBody}>
+                <Text style={styles.heroTagline}>
+                  Screenshot any look, anywhere — see it on your own body in seconds, judged honestly for your skin,
+                  your colors, and your day.
+                </Text>
+
+                <View style={[styles.row, { marginTop: 18 }]}>
+                  <Pressable style={styles.btnPrimary} onPress={loadDemoPersona}>
+                    <Text style={styles.btnPrimaryText}>Step in with the demo persona</Text>
+                  </Pressable>
+                </View>
                 <Pressable
-                  style={styles.btnGhost}
+                  style={[styles.btnGhost, { marginTop: 10, alignSelf: 'flex-start' }]}
                   onPress={async () => {
                     const img = await pickImage();
                     if (img) {
@@ -222,8 +250,34 @@ export default function App() {
                     }
                   }}
                 >
-                  <Text style={styles.btnGhostText}>My own photo</Text>
+                  <Text style={styles.btnGhostText}>Use my own photos</Text>
                 </Pressable>
+
+                <Text style={[styles.tag, { marginTop: 26, marginBottom: 10 }]}>looks you can try in one tap</Text>
+                <View style={styles.row}>
+                  {SAMPLES.map((s) => (
+                    <View key={s.name} style={{ flex: 1 }}>
+                      <Image source={s.img} style={styles.welcomeSample} />
+                      <Text style={[styles.chipText, { textAlign: 'center', marginTop: 5, color: colors.inkSoft }]}>
+                        {s.label}
+                      </Text>
+                    </View>
+                  ))}
+                </View>
+
+                <View style={styles.stepRow}>
+                  {[
+                    ['01', 'Twin', 'One full-body photo becomes your try-on double'],
+                    ['02', 'Skin', 'A selfie becomes today’s skin brief and palette'],
+                    ['03', 'Wear', 'Any screenshot, on you — judged by your stylist'],
+                  ].map(([n, t, d]) => (
+                    <View key={n} style={{ flex: 1 }}>
+                      <Text style={styles.stepNum}>{n}</Text>
+                      <Text style={styles.stepTitle}>{t}</Text>
+                      <Text style={styles.stepDesc}>{d}</Text>
+                    </View>
+                  ))}
+                </View>
               </View>
             </View>
           ) : (
@@ -249,12 +303,7 @@ export default function App() {
                       <Text style={styles.btnPrimaryText}>Read my skin</Text>
                     </Pressable>
                   )}
-                  {skinStatus === 'running' && (
-                    <View style={[styles.row, { marginTop: 10 }]}>
-                      <ActivityIndicator color={colors.blushDeep} />
-                      <Text style={[styles.body, { marginLeft: 8 }]}>Reading your skin…</Text>
-                    </View>
-                  )}
+                  {skinStatus === 'running' && <SkinScanLoader />}
                   {skinStatus === 'error' && (
                     <Text style={[styles.body, { color: colors.brick, marginTop: 8 }]}>
                       Skin analysis failed — try a clearer, closer selfie.
@@ -374,7 +423,7 @@ export default function App() {
                             }
                           }}
                         >
-                          <Image source={{ uri: `${API}/samples/${s.name}` }} style={styles.sampleImg} />
+                          <Image source={s.img} style={styles.sampleImg} />
                           <Text style={[styles.chipText, { textAlign: 'center', marginTop: 4 }]}>{s.label}</Text>
                         </Pressable>
                       ))}
@@ -388,9 +437,9 @@ export default function App() {
                       source={{ uri: stage.shot.uri }}
                       style={{ width: '100%', aspectRatio: stage.shot.width / stage.shot.height, opacity: 0.75 }}
                     />
+                    <DetectSweep />
                     <View style={styles.busyPill}>
-                      <ActivityIndicator color={colors.ink} size="small" />
-                      <Text style={[styles.tag, { marginLeft: 8 }]}>reading the look…</Text>
+                      <RotatingCaption lines={DETECT_LINES} color={colors.ink} />
                     </View>
                   </View>
                 )}
@@ -436,13 +485,14 @@ export default function App() {
                   <View>
                     <Image
                       source={{ uri: twin.uri }}
-                      style={{ width: '100%', aspectRatio: twin.width / twin.height, opacity: 0.85 }}
+                      style={{ width: '100%', aspectRatio: twin.width / twin.height, opacity: 0.55 }}
                     />
-                    <Image source={{ uri: stage.crop.uri }} style={styles.cropThumb} />
-                    <View style={styles.busyPill}>
-                      <ActivityIndicator color={colors.ink} size="small" />
-                      <Text style={[styles.tag, { marginLeft: 8 }]}>tailoring onto you…</Text>
+                    <View style={styles.loaderOverlay}>
+                      <View style={styles.loaderCard}>
+                        <TailorLoader />
+                      </View>
                     </View>
+                    <Image source={{ uri: stage.crop.uri }} style={styles.cropThumb} />
                   </View>
                 )}
 
@@ -488,9 +538,15 @@ export default function App() {
                   <View style={styles.tagHole} />
                   <Text style={[styles.tag, { textAlign: 'center' }]}>stylist verdict · {occasion}</Text>
                   {verdictBusy && (
-                    <View style={[styles.row, { justifyContent: 'center', marginTop: 10 }]}>
-                      <ActivityIndicator color={colors.inkSoft} />
-                      <Text style={[styles.body, { marginLeft: 8 }]}>Looking you over…</Text>
+                    <View style={{ marginTop: 10 }}>
+                      <RotatingCaption
+                        lines={[
+                          'Looking you over…',
+                          'Weighing the color against your brief…',
+                          'Judging it for the occasion…',
+                          'Being honest, not nice…',
+                        ]}
+                      />
                     </View>
                   )}
                   {verdict && (
@@ -672,6 +728,27 @@ const styles = StyleSheet.create({
     backgroundColor: colors.porcelain,
   },
   verdictWord: { ...serif, fontSize: 30, textAlign: 'center', marginTop: 6, marginBottom: 2 },
+  heroBleed: { marginTop: -16, marginHorizontal: -16, backgroundColor: colors.porcelain },
+  hero: { width: '100%', justifyContent: 'flex-end', overflow: 'hidden', backgroundColor: colors.porcelain },
+  heroImg: { position: 'absolute', top: 0, left: 0, width: '100%', height: '100%' },
+  heroContent: { paddingHorizontal: 22, paddingBottom: 2, gap: 6 },
+  heroBrand: { ...serif, fontSize: 64, color: colors.ink, fontWeight: '500', lineHeight: 68 },
+  heroBody: { paddingHorizontal: 22, paddingTop: 8, backgroundColor: colors.porcelain },
+  heroTagline: { color: colors.inkSoft, fontSize: 16, lineHeight: 24, fontWeight: '300' },
+  welcomeSample: { width: '100%', aspectRatio: 3 / 4, borderRadius: 12, borderWidth: 1, borderColor: colors.line },
+  stepRow: { flexDirection: 'row', gap: 14, marginTop: 26, marginBottom: 8 },
+  stepNum: { fontFamily: 'Menlo', fontSize: 11, color: colors.sageDeep, marginBottom: 4 },
+  stepTitle: { ...serif, fontSize: 18, color: colors.ink, marginBottom: 3 },
+  stepDesc: { fontSize: 11, lineHeight: 16, color: colors.inkSoft },
+  loaderOverlay: { ...StyleSheet.absoluteFillObject, alignItems: 'center', justifyContent: 'center' },
+  loaderCard: {
+    backgroundColor: 'rgba(253,252,250,0.94)',
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: colors.line,
+    paddingHorizontal: 22,
+    paddingVertical: 6,
+  },
   harmony: {
     backgroundColor: colors.blushTint,
     borderRadius: 10,
