@@ -66,7 +66,7 @@ Open http://localhost:5173, click **"Step in with the demo persona"**, and you a
 
 ## Expo mobile app
 
-`mobile/` contains a React Native (Expo SDK 57) version of the same product — twin + selfie setup, skin scores and daily brief, screenshot try-on with tappable garment detection boxes, hold-to-compare mirror, and the stylist verdict — talking to the same server.
+`mobile/` contains a React Native (Expo SDK 56) version of the same product — twin + selfie setup, skin scores and daily brief, screenshot try-on with tappable garment detection boxes, hold-to-compare mirror, and the stylist verdict — talking to the same server.
 
 | Skin today + brief | Try-on + verdict |
 |---|---|
