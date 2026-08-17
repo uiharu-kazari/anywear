@@ -1,6 +1,11 @@
+import 'dotenv/config';
 import { GoogleGenAI } from '@google/genai';
 import fs from 'node:fs';
-const ai = new GoogleGenAI({ vertexai: true, project: 'project-8b7cf02e-3e1c-451c-9be', location: 'global' });
+const ai = new GoogleGenAI({
+  vertexai: true,
+  project: process.env.GOOGLE_CLOUD_PROJECT,
+  location: process.env.GOOGLE_CLOUD_LOCATION ?? 'global',
+});
 const OUT = process.argv[2];
 fs.mkdirSync(OUT, { recursive: true });
 const LINES = [
