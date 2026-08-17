@@ -31,8 +31,7 @@
         {
           "photosPermission": "Anywear picks your photos and fashion screenshots for virtual try-on."
         }
-      ],
-      "expo-status-bar"
+      ]
     ]
   }
 }
