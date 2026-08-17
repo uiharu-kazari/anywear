@@ -1,6 +1,8 @@
-// Same server as the web app. On a physical device set EXPO_PUBLIC_API_BASE_URL
-// to your machine's LAN address, e.g. http://192.168.1.20:8931
-export const API = process.env.EXPO_PUBLIC_API_BASE_URL ?? 'http://localhost:8931';
+// Same server as the web app. Defaults to the live Cloud Run backend so the
+// mobile app works out of the box; override with EXPO_PUBLIC_API_BASE_URL to
+// point at a local server (e.g. http://<your-lan-ip>:8931).
+export const API =
+  process.env.EXPO_PUBLIC_API_BASE_URL ?? 'https://anywear-1065701526224.asia-northeast1.run.app';
 
 export interface DetectedGarment {
   label: string;
