@@ -4,6 +4,8 @@
 
 Built for the [YouCam API Skin AI & Apparel VTO Hackathon](https://youcam-api.devpost.com) (combined *Skin AI + Apparel VTO* topic).
 
+**Live demo: https://anywear-1065701526224.asia-northeast1.run.app** (Cloud Run, Tokyo)
+
 ![Anywear welcome screen](docs/screenshots/01-welcome.png)
 
 ## The problem
@@ -63,6 +65,15 @@ npm run dev            # server :8931 + web :5173
 ```
 
 Open http://localhost:5173, click **"Step in with the demo persona"**, and you are in the fitting room. Production build: `npm run build && npm start`.
+
+### Deploy (Cloud Run)
+
+The included `Dockerfile` builds the web app and serves it together with the API from one container. Vertex AI auth comes from the runtime service account (grant it `roles/aiplatform.user`):
+
+```bash
+gcloud run deploy anywear --source . --region asia-northeast1 --allow-unauthenticated \
+  --memory 1Gi --max-instances 3 --env-vars-file run-env.yaml   # YouCam keys + GOOGLE_CLOUD_PROJECT
+```
 
 ## Expo mobile app
 

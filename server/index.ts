@@ -33,7 +33,7 @@ app.get('/api/health', (c) =>
   c.json({
     ok: true,
     youcam: Boolean(process.env.YOUCAM_API_KEY && process.env.YOUCAM_SECRET_KEY),
-    gemini: Boolean(process.env.GEMINI_API_KEY),
+    gemini: Boolean(process.env.GEMINI_API_KEY || process.env.GOOGLE_CLOUD_PROJECT),
   }),
 );
 

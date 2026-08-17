@@ -1,0 +1,11 @@
+node_modules
+dist
+mobile
+docs
+scripts
+.env
+.env.*
+*.log
+.git
+.vercel
+.gstack

@@ -64,4 +64,4 @@ Browser-extension capture (right-click → try it on), makeup transfer from the 
 - [ ] **Repo URL:** https://github.com/uiharu-kazari/anywear — private, so **invite `contact_event@PerfectCorp.com` as a read collaborator**: GitHub → Settings → Collaborators → Add people → paste the email.
 - [ ] **Demo video:** upload `docs/anywear-demo.mp4` (90 s, 1080p, narrated) to YouTube as **Public or Unlisted-public**. Suggested title: "Anywear — screenshot it, wear it (YouCam API Hackathon)". Paste the YouTube link into the submission form.
 - [ ] **Screenshots:** use `docs/screenshots/*.png` (welcome, skin brief, garment detection, verdict).
-- [ ] **Try-it-out link:** the repo URL (judges run `npm run dev` per README).
+- [ ] **Try-it-out link:** **https://anywear-1065701526224.asia-northeast1.run.app** (live on Cloud Run) — plus the repo URL.
