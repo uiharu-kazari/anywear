@@ -9,8 +9,13 @@ export interface LocalImage {
   base64: string;
 }
 
-async function normalize(uri: string, width: number, maxSide = 1600): Promise<LocalImage> {
-  const actions = width > maxSide ? [{ resize: { width: maxSide } }] : [];
+async function normalize(uri: string, width: number, height: number, maxSide = 1600): Promise<LocalImage> {
+  // Constrain the LONGER side, so a tall portrait (e.g. 1200x4000) is resized too.
+  const longSide = Math.max(width, height);
+  const actions =
+    longSide > maxSide
+      ? [width >= height ? { resize: { width: maxSide } } : { resize: { height: maxSide } }]
+      : [];
   const out = await manipulateAsync(uri, actions, { base64: true, compress: 0.9, format: SaveFormat.JPEG });
   return { uri: out.uri, width: out.width, height: out.height, base64: out.base64! };
 }
@@ -19,7 +24,7 @@ export async function pickImage(): Promise<LocalImage | null> {
   const res = await ImagePicker.launchImageLibraryAsync({ mediaTypes: 'images', quality: 1 });
   const asset = res.assets?.[0];
   if (res.canceled || !asset) return null;
-  return normalize(asset.uri, asset.width ?? 4000);
+  return normalize(asset.uri, asset.width ?? 4000, asset.height ?? 4000);
 }
 
 export async function base64ToLocal(base64: string, name: string): Promise<LocalImage> {

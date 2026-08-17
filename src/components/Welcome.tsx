@@ -93,7 +93,8 @@ export default function Welcome() {
               </button>
             </div>
             <p className="mt-4 text-xs leading-relaxed text-ink-soft">
-              Photos are sent only to Perfect Corp's YouCam AI for analysis and try-on, and kept on this device.
+              Photos are sent to Perfect Corp's YouCam AI for analysis and try-on, and the finished try-on image is
+              sent to Google Gemini for styling feedback. Your originals are kept on this device.
             </p>
           </div>
         )}

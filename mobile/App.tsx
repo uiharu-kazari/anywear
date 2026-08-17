@@ -65,8 +65,10 @@ export default function App() {
   const [stage, setStage] = useState<Stage>({ phase: 'empty' });
   const [verdict, setVerdict] = useState<StylistVerdict | null>(null);
   const [verdictBusy, setVerdictBusy] = useState(false);
+  const [verdictError, setVerdictError] = useState(false);
   const [showBefore, setShowBefore] = useState(false);
   const scrollRef = useRef<ScrollView>(null);
+  const verdictSeq = useRef(0); // a returning verdict applies only if it is latest
 
   // Screenshot/CI mode: EXPO_PUBLIC_AUTODEMO=1 walks the whole demo unattended.
   const autoRan = useRef(false);
@@ -108,7 +110,7 @@ export default function App() {
       setTwin(twinImg);
       setSelfie(selfieImg);
       setTwinFileId(null);
-      void ensureTwinUploaded(twinImg);
+      void ensureTwinUploaded(twinImg).catch(() => {}); // retried lazily on first try-on
     } catch (err) {
       setStage({ phase: 'error', message: `Could not reach the Anywear server at ${API} — is it running?` });
     }
@@ -131,11 +133,16 @@ export default function App() {
       if (st.status !== 'success') throw new Error(st.error ?? 'Skin analysis failed.');
       setSkinOutput(st.output ?? []);
       setSkinStatus('done');
-      const concerns = (st.output ?? [])
-        .filter((o) => typeof o.ui_score === 'number' && o.type !== 'all')
-        .map((o) => ({ type: o.type, raw_score: o.raw_score ?? 0, ui_score: o.ui_score ?? 0 }));
-      const res = await api.skinBrief(concerns);
-      setBrief(res.brief);
+      // The brief is a best-effort extra: if Gemini fails here, keep the scores.
+      try {
+        const concerns = (st.output ?? [])
+          .filter((o) => typeof o.ui_score === 'number' && o.type !== 'all')
+          .map((o) => ({ type: o.type, raw_score: o.raw_score ?? 0, ui_score: o.ui_score ?? 0 }));
+        const res = await api.skinBrief(concerns);
+        setBrief(res.brief);
+      } catch {
+        // scores stay; brief section simply won't render
+      }
     } catch {
       setSkinStatus('error');
     }
@@ -159,6 +166,9 @@ export default function App() {
 
   async function tryGarment(shot: LocalImage, garment: DetectedGarment) {
     if (!twin) return;
+    // Flip out of 'pick' synchronously so a double-tap can't launch two paid
+    // try-on tasks while cropByBox is still running.
+    setStage({ phase: 'running', garment, crop: { uri: shot.uri, width: shot.width, height: shot.height, base64: '' } });
     try {
       const crop = await cropByBox(shot, garment.box_2d);
       setStage({ phase: 'running', garment, crop });
@@ -169,13 +179,18 @@ export default function App() {
       setStage({ phase: 'done', garment, crop, url: st.url });
       void judge(st.url, garment);
     } catch (err) {
+      // A failed try-on may mean the stored twin file expired; drop it so the
+      // next attempt re-uploads the photo.
+      setTwinFileId(null);
       setStage({ phase: 'error', message: err instanceof Error ? err.message : 'Try-on failed.' });
     }
   }
 
   async function judge(url: string, garment: DetectedGarment, occ = occasion) {
+    const seq = ++verdictSeq.current;
     setVerdictBusy(true);
     setVerdict(null);
+    setVerdictError(false);
     try {
       const res = await api.verdict({
         tryOnUrl: url,
@@ -183,11 +198,12 @@ export default function App() {
         occasion: occ,
         brief,
       });
+      if (seq !== verdictSeq.current) return; // superseded by a newer request
       setVerdict(res.verdict);
     } catch {
-      // leave verdict empty
+      if (seq === verdictSeq.current) setVerdictError(true);
     } finally {
-      setVerdictBusy(false);
+      if (seq === verdictSeq.current) setVerdictBusy(false);
     }
   }
 
@@ -246,7 +262,7 @@ export default function App() {
                     if (img) {
                       setTwin(img);
                       setTwinFileId(null);
-                      void ensureTwinUploaded(img);
+                      void ensureTwinUploaded(img).catch(() => {}); // retried lazily on first try-on
                     }
                   }}
                 >
@@ -533,7 +549,7 @@ export default function App() {
               </View>
 
               {/* Verdict */}
-              {(verdictBusy || verdict) && (
+              {(verdictBusy || verdict || verdictError) && (
                 <View style={[styles.card, styles.tagCard]}>
                   <View style={styles.tagHole} />
                   <Text style={[styles.tag, { textAlign: 'center' }]}>stylist verdict · {occasion}</Text>
@@ -547,6 +563,17 @@ export default function App() {
                           'Being honest, not nice…',
                         ]}
                       />
+                    </View>
+                  )}
+                  {verdictError && !verdictBusy && (
+                    <View style={{ marginTop: 10, alignItems: 'center' }}>
+                      <Text style={[styles.body, { textAlign: 'center' }]}>The stylist stepped away.</Text>
+                      <Pressable
+                        style={[styles.btnGhost, { marginTop: 8 }]}
+                        onPress={() => stage.phase === 'done' && judge(stage.url, stage.garment)}
+                      >
+                        <Text style={styles.btnGhostText}>Ask again</Text>
+                      </Pressable>
                     </View>
                   )}
                   {verdict && (

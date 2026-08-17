@@ -1,8 +1,12 @@
 import { useRef, useState } from 'react';
 
-/** Draggable before/after reveal — the full-length mirror moment. */
+/** Draggable before/after reveal — the full-length mirror moment.
+ * `pos` is the divider position (0-100). Left of the divider shows "before",
+ * right shows "in it", and the handle sits exactly under the pointer. Both
+ * images are full-size absolute layers; the before layer is clipped with
+ * clip-path so there is no width math and no ref-dependent first render. */
 export default function BeforeAfter(props: { before: string; after: string; altAfter: string }) {
-  const [pos, setPos] = useState(72);
+  const [pos, setPos] = useState(28);
   const ref = useRef<HTMLDivElement>(null);
 
   function fromPointer(clientX: number) {
@@ -21,17 +25,18 @@ export default function BeforeAfter(props: { before: string; after: string; altA
       }}
       onPointerMove={(e) => e.buttons === 1 && fromPointer(e.clientX)}
     >
+      {/* base layer: the try-on result */}
       <img src={props.after} alt={props.altAfter} className="absolute inset-0 h-full w-full object-cover" />
-      <div className="absolute inset-0 overflow-hidden" style={{ width: `${100 - pos}%` }} aria-hidden>
-        <img
-          src={props.before}
-          alt=""
-          className="absolute inset-0 h-full max-w-none object-cover"
-          style={{ width: ref.current?.clientWidth ?? '100%', height: '100%' }}
-        />
-      </div>
-      {/* handle */}
-      <div className="absolute inset-y-0" style={{ left: `${100 - pos}%` }} aria-hidden>
+      {/* top layer: the original photo, clipped to the left of the divider */}
+      <img
+        src={props.before}
+        alt=""
+        aria-hidden
+        className="absolute inset-0 h-full w-full object-cover"
+        style={{ clipPath: `inset(0 ${100 - pos}% 0 0)` }}
+      />
+      {/* handle at the divider */}
+      <div className="absolute inset-y-0" style={{ left: `${pos}%` }} aria-hidden>
         <div className="absolute inset-y-0 -left-px w-0.5 bg-white/85 shadow-[0_0_10px_rgba(0,0,0,0.35)]" />
         <div className="absolute top-1/2 -left-3.5 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-full bg-white text-[10px] text-ink shadow-md">
           ↔

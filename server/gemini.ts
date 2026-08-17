@@ -88,7 +88,14 @@ Rules: skip shoes, bags, hats, jewelry, accessories. Skip garments that are most
       },
     },
   })) as DetectedGarment[];
-  return out.filter((g) => Array.isArray(g.box_2d) && g.box_2d.length === 4);
+  // Validate boxes: finite, in-range [0,1000], and non-degenerate (ymax>ymin,
+  // xmax>xmin) so a bad model box can't produce a zero/negative crop downstream.
+  return out.filter((g) => {
+    const b = g.box_2d;
+    if (!Array.isArray(b) || b.length !== 4 || !b.every((n) => Number.isFinite(n) && n >= 0 && n <= 1000)) return false;
+    const [ymin, xmin, ymax, xmax] = b;
+    return ymax - ymin > 10 && xmax - xmin > 10;
+  });
 }
 
 export interface SkinBrief {

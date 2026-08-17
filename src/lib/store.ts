@@ -53,6 +53,7 @@ interface AnywearState {
   stage: StagePhase;
   verdict: StylistVerdict | null;
   verdictStatus: 'idle' | 'running' | 'done' | 'error';
+  verdictSeq: number; // monotonic; a returning verdict applies only if it is latest
   lookbook: LookbookEntry[];
   busyError: string | null;
 
@@ -82,15 +83,24 @@ export const useStore = create<AnywearState>()(
       stage: { phase: 'empty' },
       verdict: null,
       verdictStatus: 'idle',
+      verdictSeq: 0,
       lookbook: [],
       busyError: null,
 
       setTwin: async (dataUrl) => {
         const stored = await resizeDataURL(dataUrl, 1100, 0.86);
-        set({ twinPhoto: stored, twinFileId: null });
+        // Replacing the twin invalidates any result generated for the old body.
+        set({
+          twinPhoto: stored,
+          twinFileId: null,
+          stage: { phase: 'empty' },
+          verdict: null,
+          verdictStatus: 'idle',
+        });
         try {
           const { fileId } = await api.uploadPhoto(base64Of(dataUrl), 'image/jpeg', 'twin.jpg');
-          set({ twinFileId: fileId });
+          // Only keep this fileId if the twin hasn't been replaced again meanwhile.
+          if (get().twinPhoto === stored) set({ twinFileId: fileId });
         } catch {
           // Upload retried lazily on the first try-on.
         }
@@ -161,13 +171,17 @@ export const useStore = create<AnywearState>()(
       pickGarment: async (garment) => {
         const st = get().stage;
         if (st.phase !== 'pick') return;
-        const crop = await cropByBox(st.screenshot, garment.box_2d);
-        await get().tryGarment({
+        // Flip out of 'pick' synchronously so a double-tap can't launch two
+        // paid try-on tasks while cropByBox is still running.
+        const pick: GarmentPick = {
           label: garment.label,
           category: garment.category,
           description: garment.description,
-          crop,
-        });
+          crop: st.screenshot,
+        };
+        set({ stage: { phase: 'running', garment: pick } });
+        const crop = await cropByBox(st.screenshot, garment.box_2d);
+        await get().tryGarment({ ...pick, crop });
       },
 
       tryGarment: async (garment) => {
@@ -187,14 +201,22 @@ export const useStore = create<AnywearState>()(
           set({ stage: { phase: 'done', garment, result, resultUrl: st.url } });
           void get().requestVerdict();
         } catch (err) {
-          set({ stage: { phase: 'error', message: err instanceof Error ? err.message : 'Try-on failed.' } });
+          // A failed try-on may mean the stored twin file expired; drop it so
+          // the next attempt re-uploads the photo instead of failing forever.
+          set({
+            twinFileId: null,
+            stage: { phase: 'error', message: err instanceof Error ? err.message : 'Try-on failed.' },
+          });
         }
       },
 
       requestVerdict: async () => {
         const { stage, occasion, skin } = get();
-        if (stage.phase !== 'done') return;
-        set({ verdictStatus: 'running', verdict: null });
+        // Can only judge a freshly generated try-on (a reopened lookbook entry
+        // has no live URL to re-judge against).
+        if (stage.phase !== 'done' || !stage.resultUrl) return;
+        const seq = get().verdictSeq + 1;
+        set({ verdictStatus: 'running', verdict: null, verdictSeq: seq });
         try {
           const { verdict } = await api.verdict({
             tryOnUrl: stage.resultUrl,
@@ -202,6 +224,8 @@ export const useStore = create<AnywearState>()(
             occasion,
             brief: skin.brief,
           });
+          // A newer request (occasion change / new try-on) supersedes this one.
+          if (get().verdictSeq !== seq) return;
           set({ verdict, verdictStatus: 'done' });
           const [thumb, resultSmall] = await Promise.all([
             resizeDataURL(stage.garment.crop, 260, 0.8),
@@ -222,6 +246,7 @@ export const useStore = create<AnywearState>()(
             lookbook: [entry, ...s.lookbook.filter((e) => e.result !== resultSmall)].slice(0, 10),
           }));
         } catch {
+          if (get().verdictSeq !== seq) return;
           set({ verdictStatus: 'error' });
           // Still keep the look in the book, just without a verdict.
           const [thumb, resultSmall] = await Promise.all([
@@ -260,7 +285,8 @@ export const useStore = create<AnywearState>()(
         });
       },
 
-      clearStage: () => set({ stage: { phase: 'empty' }, verdict: null, verdictStatus: 'idle' }),
+      clearStage: () =>
+        set((s) => ({ stage: { phase: 'empty' }, verdict: null, verdictStatus: 'idle', verdictSeq: s.verdictSeq + 1 })),
 
       resetAll: () =>
         set({
