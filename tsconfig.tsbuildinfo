@@ -1,1 +1,1 @@
-{"root":["./server/gemini.ts","./server/index.ts","./server/youcam.ts"],"version":"5.9.3"}
+{"root":["./src/app.tsx","./src/main.tsx","./src/components/beforeafter.tsx","./src/components/lookbook.tsx","./src/components/mirrorstage.tsx","./src/components/photoslot.tsx","./src/components/skinpanel.tsx","./src/components/studio.tsx","./src/components/twinpanel.tsx","./src/components/verdicttag.tsx","./src/components/welcome.tsx","./src/lib/api.ts","./src/lib/image.ts","./src/lib/store.ts","./server/gemini.ts","./server/index.ts","./server/youcam.ts"],"version":"5.9.3"}

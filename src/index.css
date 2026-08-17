@@ -1,0 +1,120 @@
+@import '@fontsource/cormorant/400.css';
+@import '@fontsource/cormorant/500.css';
+@import '@fontsource/cormorant/600.css';
+@import '@fontsource/cormorant/400-italic.css';
+@import '@fontsource/cormorant/500-italic.css';
+@import '@fontsource/outfit/300.css';
+@import '@fontsource/outfit/400.css';
+@import '@fontsource/outfit/500.css';
+@import '@fontsource/ibm-plex-mono/400.css';
+@import '@fontsource/ibm-plex-mono/500.css';
+@import 'tailwindcss';
+
+@theme {
+  --color-porcelain: #f6f4f1;
+  --color-paper: #fdfcfa;
+  --color-ink: #221f1c;
+  --color-ink-soft: #6b655e;
+  --color-line: #e4dfd8;
+  --color-sage: #6f8a6b;
+  --color-sage-deep: #4c6349;
+  --color-sage-tint: #e6ecE2;
+  --color-blush: #c08064;
+  --color-blush-deep: #9d5a40;
+  --color-blush-tint: #f3e4db;
+  --color-ochre: #a07c2e;
+  --color-brick: #a34a38;
+
+  --font-display: 'Cormorant', 'Georgia', serif;
+  --font-body: 'Outfit', 'Avenir Next', sans-serif;
+  --font-tag: 'IBM Plex Mono', monospace;
+}
+
+html {
+  background: var(--color-porcelain);
+}
+
+body {
+  font-family: var(--font-body);
+  color: var(--color-ink);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* mono garment-tag label */
+.tag-label {
+  font-family: var(--font-tag);
+  font-size: 0.66rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--color-ink-soft);
+}
+
+/* scan shimmer while an AI task runs */
+@keyframes scanline {
+  0% {
+    top: -12%;
+  }
+  100% {
+    top: 104%;
+  }
+}
+.scanline::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: -12%;
+  height: 10%;
+  background: linear-gradient(to bottom, transparent, rgba(255, 255, 255, 0.75), transparent);
+  animation: scanline 2.1s ease-in-out infinite;
+  pointer-events: none;
+}
+
+/* hang-tag swing-in */
+@keyframes tagswing {
+  0% {
+    transform: rotate(-7deg) translateY(-6px);
+    opacity: 0;
+  }
+  55% {
+    transform: rotate(-0.5deg) translateY(0);
+    opacity: 1;
+  }
+  100% {
+    transform: rotate(-2deg) translateY(0);
+  }
+}
+.tag-swing {
+  animation: tagswing 0.7s cubic-bezier(0.2, 0.9, 0.3, 1.15) both;
+  transform: rotate(-2deg);
+}
+
+/* soft reveal for the mirror result */
+@keyframes mirror-reveal {
+  from {
+    opacity: 0;
+    filter: brightness(1.35) saturate(0.7);
+  }
+  to {
+    opacity: 1;
+    filter: brightness(1) saturate(1);
+  }
+}
+.mirror-reveal {
+  animation: mirror-reveal 0.9s ease-out both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .scanline::after,
+  .tag-swing,
+  .mirror-reveal {
+    animation: none;
+  }
+  .tag-swing {
+    transform: rotate(-2deg);
+    opacity: 1;
+  }
+  .mirror-reveal {
+    opacity: 1;
+  }
+}
