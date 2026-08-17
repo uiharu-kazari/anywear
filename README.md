@@ -85,12 +85,20 @@ gcloud run deploy anywear --source . --region asia-northeast1 --allow-unauthenti
 
 Waiting states are crafted, not spinners: a face-scan animation while Skin Analysis runs, a viewfinder sweep during garment detection, and a stitched-hanger "tailoring" card while the try-on generates — each with rotating captions tied to the actual work.
 
-```bash
-cd mobile && npm install
-EXPO_PUBLIC_API_BASE_URL=http://<your-lan-ip>:8931 npx expo start
-```
+### Run it on your phone
 
-Scan the QR with Expo Go (on the iOS simulator, `http://localhost:8931` works as-is). `EXPO_PUBLIC_AUTODEMO=1` makes the app walk the whole demo unattended — handy for screenshots and CI.
+The mobile app runs through **Expo Go** (no build step). Because it targets **Expo SDK 54**, the phone's Expo Go must be the SDK-54 build — install "Expo Go" from the App Store / Play Store.
+
+1. Start the backend and the Expo dev server, pointing the app at your machine's LAN IP so the phone can reach the API:
+   ```bash
+   npm install && npm run dev                       # in the repo root: API :8931 + web :5173
+   cd mobile && npm install
+   EXPO_PUBLIC_API_BASE_URL=http://<your-lan-ip>:8931 npx expo start   # prints a QR
+   ```
+2. Put the phone on the **same Wi-Fi** as the computer.
+3. **iOS:** scan the QR with the Camera app and tap the banner. **Android:** scan from inside Expo Go. Or in Expo Go choose *Enter URL manually* and type the `exp://<lan-ip>:8082` address the CLI prints.
+
+The QR is a local dev pointer — it only works on the same network while `expo start` is running. For a zero-install experience on any device (and the link to hand judges), use the **live web app** above. On the iOS Simulator, `EXPO_PUBLIC_API_BASE_URL=http://localhost:8931` works as-is. `EXPO_PUBLIC_AUTODEMO=1` makes the app walk the whole demo unattended — handy for screenshots and CI.
 
 ## Demo assets
 
