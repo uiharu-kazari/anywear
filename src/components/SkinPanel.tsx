@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useStore } from '../lib/store';
 import { proxied } from '../lib/api';
 import { fileToDataURL } from '../lib/image';
+import { IS_ANNA } from '../lib/anna';
 
 const CONCERN_NAMES: Record<string, string> = {
   redness: 'Redness',
@@ -77,7 +78,9 @@ export default function SkinPanel() {
             {skin.status === 'idle' && (
               <div className="flex h-full flex-col items-start justify-center gap-2">
                 <p className="text-xs leading-relaxed text-ink-soft">
-                  Seven concerns, scored by YouCam Skin AI in seconds.
+                  {IS_ANNA
+                    ? 'A quick visual read of six skin concerns by your Anna AI — styling guidance, not a diagnosis.'
+                    : 'Seven concerns, scored by YouCam Skin AI in seconds.'}
                 </p>
                 <button
                   type="button"

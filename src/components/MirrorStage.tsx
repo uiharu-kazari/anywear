@@ -1,12 +1,13 @@
 import { useState } from 'react';
+import { SAMPLES as SAMPLE_DIR } from '../lib/samples';
 import { useStore } from '../lib/store';
 import { fileToDataURL, urlToDataURL } from '../lib/image';
 import BeforeAfter from './BeforeAfter';
 
 const SAMPLES = [
-  { src: '/samples/street_model.png', label: 'Street-style photo' },
-  { src: '/samples/garment_dress.png', label: 'Slip dress shot' },
-  { src: '/samples/garment_jacket.png', label: 'Blazer product shot' },
+  { src: SAMPLE_DIR + 'street_model.png', label: 'Street-style photo' },
+  { src: SAMPLE_DIR + 'garment_dress.png', label: 'Slip dress shot' },
+  { src: SAMPLE_DIR + 'garment_jacket.png', label: 'Blazer product shot' },
 ];
 
 export default function MirrorStage() {

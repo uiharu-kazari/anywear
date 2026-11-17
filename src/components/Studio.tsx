@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { IS_ANNA } from '../lib/anna';
 import { useStore } from '../lib/store';
 import { api } from '../lib/api';
 import { fileToDataURL } from '../lib/image';
@@ -16,7 +17,8 @@ export default function Studio() {
   const [custom, setCustom] = useState('');
 
   useEffect(() => {
-    api.credits().then((r) => setUnits(r.units)).catch(() => {});
+    // Our YouCam unit balance is operator info, not something Anna users need.
+    if (!IS_ANNA) api.credits().then((r) => setUnits(r.units)).catch(() => {});
   }, [stage.phase]);
 
   // Paste a screenshot anywhere in the studio.
@@ -119,7 +121,7 @@ export default function Studio() {
 
       <footer className="mx-auto max-w-7xl px-5 pb-6">
         <p className="tag-label">
-          youcam skin ai + apparel vto · gemini styling brain · not medical advice
+          {IS_ANNA ? 'anna ai skin read, try-on + styling' : 'youcam skin ai + apparel vto · gemini styling brain'} · not medical advice
         </p>
       </footer>
     </div>

@@ -8,6 +8,9 @@
     "dev:server": "tsx watch server/index.ts",
     "dev:web": "vite",
     "build": "tsc -b && vite build",
+    "build:anna": "tsc -b && vite build --mode anna",
+    "anna:dev": "npm run build:anna && cd anna && anna-app dev",
+    "anna:validate": "npm run build:anna && cd anna && anna-app validate --strict",
     "start": "NODE_ENV=production tsx server/index.ts",
     "preview": "vite preview"
   },

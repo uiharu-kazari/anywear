@@ -1,0 +1,48 @@
+{
+  "schema": 4,
+  "required_executas": [],
+  "tags": [
+    "fashion",
+    "virtual-try-on",
+    "styling",
+    "skin-analysis"
+  ],
+  "ui": {
+    "form_factors": [
+      "desktop"
+    ],
+    "bundle": {
+      "format": "static-spa",
+      "entry": "index.html"
+    },
+    "views": [
+      {
+        "name": "main",
+        "title": "Anywear",
+        "default": true,
+        "single_instance": true,
+        "default_size": {
+          "w": 1280,
+          "h": 840
+        },
+        "min_size": {
+          "w": 900,
+          "h": 620
+        }
+      }
+    ],
+    "csp_overrides": {
+      "img-src": [
+        "https:"
+      ],
+      "connect-src": [
+        "https:"
+      ]
+    },
+    "state_merge": "last_writer_wins"
+  },
+  "dev": {
+    "seed_storage": {},
+    "user_id": 1
+  }
+}

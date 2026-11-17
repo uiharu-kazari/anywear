@@ -1,4 +1,6 @@
 import { useState } from 'react';
+import { IS_ANNA } from '../lib/anna';
+import { SAMPLES } from '../lib/samples';
 import { useStore } from '../lib/store';
 import { urlToDataURL } from '../lib/image';
 import PhotoSlot from './PhotoSlot';
@@ -14,8 +16,8 @@ export default function Welcome() {
     setLoadingDemo(true);
     try {
       const [person, selfie] = await Promise.all([
-        urlToDataURL('/samples/person.png'),
-        urlToDataURL('/samples/selfie.png'),
+        urlToDataURL(SAMPLES + 'person.png'),
+        urlToDataURL(SAMPLES + 'selfie.png'),
       ]);
       setSelfie(selfie);
       await setTwin(person); // setting the twin last flips App into the studio
@@ -93,19 +95,20 @@ export default function Welcome() {
               </button>
             </div>
             <p className="mt-4 text-xs leading-relaxed text-ink-soft">
-              Photos are sent to Perfect Corp's YouCam AI for analysis and try-on, and the finished try-on image is
-              sent to Google Gemini for styling feedback. Your originals are kept on this device.
+              {IS_ANNA
+                ? "Your photos are processed by Anna's AI models (billed to your Anna credits) for the skin read, try-on and styling feedback, and saved privately to your Anna account."
+                : "Photos are sent to Perfect Corp's YouCam AI for analysis and try-on, and the finished try-on image is sent to Google Gemini for styling feedback. Your originals are kept on this device."}
             </p>
           </div>
         )}
 
-        <p className="tag-label mt-16">Powered by YouCam Skin AI · Apparel VTO · Gemini</p>
+        <p className="tag-label mt-16">Powered by {IS_ANNA ? 'Anna AI' : 'YouCam Skin AI · Apparel VTO · Gemini'}</p>
       </section>
 
       {/* Full-height image plane */}
       <section className="relative min-h-[46vh] flex-1 lg:min-h-dvh">
         <img
-          src="/samples/hero_result.jpg"
+          src={SAMPLES + 'hero_result.jpg'}
           alt="A virtual try-on result: the demo persona wearing a sage satin slip dress"
           className="absolute inset-0 h-full w-full object-cover object-top"
         />

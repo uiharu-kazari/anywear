@@ -7,3 +7,7 @@ dist
 *.log
 .vercel
 .gstack/
+
+# Anna build output + local registration
+anna/bundle/
+anna/.anna/

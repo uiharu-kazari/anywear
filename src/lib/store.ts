@@ -1,6 +1,9 @@
 import { create } from 'zustand';
-import { persist } from 'zustand/middleware';
+import { createJSONStorage, persist } from 'zustand/middleware';
+import { IS_ANNA, friendlyAnnaError } from './anna';
+import { appStorage } from './persist';
 import {
+  annaApi,
   api,
   pollUntilDone,
   proxied,
@@ -9,7 +12,7 @@ import {
   type SkinOutput,
   type StylistVerdict,
 } from './api';
-import { base64Of, cropByBox, resizeDataURL, urlToDataURL } from './image';
+import { base64Of, cropByBox, imageSize, resizeDataURL, shrinkForStorage, urlToDataURL } from './image';
 
 export interface GarmentPick {
   label: string;
@@ -46,7 +49,7 @@ interface SkinState {
 
 interface AnywearState {
   twinPhoto: string | null; // stored downscaled dataURL
-  twinFileId: string | null; // YouCam file_id (valid ~30 days)
+  twinFileId: string | null; // web: YouCam file_id (~30 days) · Anna: durable upload r2_key
   selfiePhoto: string | null;
   skin: SkinState;
   occasion: string;
@@ -71,6 +74,16 @@ interface AnywearState {
 }
 
 const initialSkin: SkinState = { status: 'idle', output: [], brief: null, briefStatus: 'idle' };
+
+let hydrationError: unknown = null;
+const hydrationErrorListeners = new Set<(err: unknown) => void>();
+
+/** Fires (immediately, if it already happened) when loading saved state fails. */
+export function onHydrationError(cb: (err: unknown) => void): () => void {
+  if (hydrationError) cb(hydrationError);
+  hydrationErrorListeners.add(cb);
+  return () => hydrationErrorListeners.delete(cb);
+}
 
 export const useStore = create<AnywearState>()(
   persist(
@@ -98,7 +111,9 @@ export const useStore = create<AnywearState>()(
           verdictStatus: 'idle',
         });
         try {
-          const { fileId } = await api.uploadPhoto(base64Of(dataUrl), 'image/jpeg', 'twin.jpg');
+          const fileId = IS_ANNA
+            ? await annaApi.uploadTwin(stored)
+            : (await api.uploadPhoto(base64Of(dataUrl), 'image/jpeg', 'twin.jpg')).fileId;
           // Only keep this fileId if the twin hasn't been replaced again meanwhile.
           if (get().twinPhoto === stored) set({ twinFileId: fileId });
         } catch {
@@ -115,10 +130,15 @@ export const useStore = create<AnywearState>()(
         if (!selfiePhoto) return;
         set({ skin: { ...initialSkin, status: 'running' } });
         try {
-          const { taskId } = await api.skinStart(base64Of(selfiePhoto), 'image/jpeg');
-          const st = await pollUntilDone(() => api.skinStatus(taskId), { intervalMs: 2500 });
-          if (st.status !== 'success') throw new Error(st.error ?? 'Skin analysis failed.');
-          const output = st.output ?? [];
+          let output: SkinOutput[];
+          if (IS_ANNA) {
+            output = await annaApi.skinRead(selfiePhoto);
+          } else {
+            const { taskId } = await api.skinStart(base64Of(selfiePhoto), 'image/jpeg');
+            const st = await pollUntilDone(() => api.skinStatus(taskId), { intervalMs: 2500 });
+            if (st.status !== 'success') throw new Error(st.error ?? 'Skin analysis failed.');
+            output = st.output ?? [];
+          }
           set({ skin: { status: 'done', output, brief: null, briefStatus: 'running' } });
           const concerns = output
             .filter((o) => typeof o.ui_score === 'number' && o.type !== 'all')
@@ -130,7 +150,7 @@ export const useStore = create<AnywearState>()(
             set((s) => ({ skin: { ...s.skin, briefStatus: 'error' } }));
           }
         } catch (err) {
-          set({ skin: { ...initialSkin, status: 'error', error: err instanceof Error ? err.message : 'Failed.' } });
+          set({ skin: { ...initialSkin, status: 'error', error: friendlyAnnaError(err) || 'Failed.' } });
         }
       },
 
@@ -163,7 +183,7 @@ export const useStore = create<AnywearState>()(
           set({ stage: { phase: 'pick', screenshot: dataUrl, garments } });
         } catch (err) {
           set({
-            stage: { phase: 'error', message: err instanceof Error ? err.message : 'Detection failed.', screenshot: dataUrl },
+            stage: { phase: 'error', message: friendlyAnnaError(err) || 'Detection failed.', screenshot: dataUrl },
           });
         }
       },
@@ -186,6 +206,28 @@ export const useStore = create<AnywearState>()(
 
       tryGarment: async (garment) => {
         set({ stage: { phase: 'running', garment }, verdict: null, verdictStatus: 'idle' });
+        if (IS_ANNA) {
+          try {
+            const twinPhoto = get().twinPhoto;
+            if (!twinPhoto) throw new Error('Add your photo first.');
+            const { width, height } = await imageSize(twinPhoto);
+            // Match the twin photo's framing so before/after line up.
+            const ratios: [string, number][] = [['9:16', 9 / 16], ['2:3', 2 / 3], ['3:4', 3 / 4], ['4:5', 4 / 5], ['1:1', 1], ['5:4', 5 / 4], ['4:3', 4 / 3], ['3:2', 3 / 2], ['16:9', 16 / 9]];
+            const r = width / height;
+            const [aspectRatio, best] = ratios.reduce((a, b) => (Math.abs(Math.log(b[1] / r)) < Math.abs(Math.log(a[1] / r)) ? b : a));
+            const size = best < 1 ? `${Math.round((1024 * best) / 16) * 16}x1024` : `1024x${Math.round(1024 / best / 16) * 16}`;
+            const { url, twinKey } = await annaApi.tryOn({ twinKey: get().twinFileId, twinPhoto, garment, size, aspectRatio });
+            if (get().twinPhoto === twinPhoto) set({ twinFileId: twinKey });
+            // Anna result URLs expire in ~30 min; keep the pixels when the host
+            // lets us read them, otherwise show the URL for this session.
+            const result = await urlToDataURL(url, 1400).catch(() => url);
+            set({ stage: { phase: 'done', garment, result, resultUrl: url } });
+            void get().requestVerdict();
+          } catch (err) {
+            set({ stage: { phase: 'error', message: friendlyAnnaError(err) || 'Try-on failed.' } });
+          }
+          return;
+        }
         try {
           let fileId = get().twinFileId;
           if (!fileId) {
@@ -220,6 +262,7 @@ export const useStore = create<AnywearState>()(
         try {
           const { verdict } = await api.verdict({
             tryOnUrl: stage.resultUrl,
+            tryOnDataUrl: stage.result,
             garment: { label: stage.garment.label, description: stage.garment.description },
             occasion,
             brief: skin.brief,
@@ -228,8 +271,8 @@ export const useStore = create<AnywearState>()(
           if (get().verdictSeq !== seq) return;
           set({ verdict, verdictStatus: 'done' });
           const [thumb, resultSmall] = await Promise.all([
-            resizeDataURL(stage.garment.crop, 260, 0.8),
-            resizeDataURL(stage.result, 700, 0.82),
+            shrinkForStorage(stage.garment.crop, 260, 0.8),
+            shrinkForStorage(stage.result, 700, 0.82),
           ]);
           const entry: LookbookEntry = {
             id: `${Date.now()}`,
@@ -250,8 +293,8 @@ export const useStore = create<AnywearState>()(
           set({ verdictStatus: 'error' });
           // Still keep the look in the book, just without a verdict.
           const [thumb, resultSmall] = await Promise.all([
-            resizeDataURL(stage.garment.crop, 260, 0.8),
-            resizeDataURL(stage.result, 700, 0.82),
+            shrinkForStorage(stage.garment.crop, 260, 0.8),
+            shrinkForStorage(stage.result, 700, 0.82),
           ]);
           set((s) => ({
             lookbook: [
@@ -303,6 +346,14 @@ export const useStore = create<AnywearState>()(
     }),
     {
       name: 'anywear',
+      storage: createJSONStorage(appStorage),
+      // zustand never marks the store hydrated when getItem throws; surface the
+      // error so the UI can say so instead of loading forever.
+      onRehydrateStorage: () => (_state, error) => {
+        if (!error) return;
+        hydrationError = error;
+        hydrationErrorListeners.forEach((cb) => cb(error));
+      },
       partialize: (s) => ({
         twinPhoto: s.twinPhoto,
         twinFileId: s.twinFileId,

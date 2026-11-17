@@ -2,6 +2,7 @@ import 'dotenv/config';
 import { serve } from '@hono/node-server';
 import { serveStatic } from '@hono/node-server/serve-static';
 import { Hono } from 'hono';
+import { cors } from 'hono/cors';
 import {
   uploadImage,
   startSkinAnalysis,
@@ -68,7 +69,7 @@ async function fetchImageSafely(raw: string): Promise<{ buffer: Buffer; mime: st
 
 class HttpError extends Error {
   constructor(
-    public status: 400 | 402 | 413 | 429 | 502,
+    public status: 400 | 402 | 403 | 413 | 429 | 502,
     message: string,
   ) {
     super(message);
@@ -84,9 +85,15 @@ const RATE_MAX = 90; // requests/min/IP across all routes
 const COST_WINDOW_MS = 24 * 60 * 60 * 1000;
 // Global ceiling on paid calls/day so a public URL can't drain the unit budget.
 // Worst case (all try-ons) ~= 2 units each; 150 caps damage at ~300 units.
-const COST_MAX_PER_DAY = 150;
+const COST_MAX_PER_DAY = Number(process.env.COST_MAX_PER_DAY ?? 150);
+// The Anna edition gets its own budget, metered in YouCam units (skin analysis
+// = 12, try-on = 2), so marketplace traffic can't starve the public web demo
+// and worst-case daily spend is a known number. Gemini-only calls are free here.
+const ANNA_UNITS_PER_DAY = Number(process.env.ANNA_UNITS_PER_DAY ?? 200);
+const UNIT_COST = { skin: 12, vto: 2, gemini: 0 } as const;
 const hits = new Map<string, number[]>();
-let costEvents: number[] = [];
+let webCostEvents: number[] = [];
+let annaUnitEvents: { at: number; units: number }[] = [];
 
 function clientIp(c: { req: { header: (k: string) => string | undefined } }): string {
   const fwd = c.req.header('x-forwarded-for');
@@ -101,16 +108,52 @@ function rateLimit(ip: string) {
   hits.set(ip, arr);
 }
 
-function chargeGuard() {
-  const now = Date.now();
-  costEvents = costEvents.filter((t) => now - t < COST_WINDOW_MS);
-  if (costEvents.length >= COST_MAX_PER_DAY) throw new HttpError(402, 'Daily demo limit reached — please try again tomorrow.');
-  costEvents.push(now);
+function clientKind(c: { req: { header: (k: string) => string | undefined } }): 'web' | 'anna' {
+  return c.req.header('x-anywear-client') === 'anna' ? 'anna' : 'web';
 }
+
+function chargeGuard(c: { req: { header: (k: string) => string | undefined } }, kind: keyof typeof UNIT_COST) {
+  const now = Date.now();
+  if (clientKind(c) === 'anna') {
+    annaUnitEvents = annaUnitEvents.filter((e) => now - e.at < COST_WINDOW_MS);
+    const used = annaUnitEvents.reduce((sum, e) => sum + e.units, 0);
+    if (used + UNIT_COST[kind] > ANNA_UNITS_PER_DAY) {
+      throw new HttpError(402, 'Anywear has hit today\'s try-on capacity — please come back tomorrow.');
+    }
+    if (UNIT_COST[kind]) annaUnitEvents.push({ at: now, units: UNIT_COST[kind] });
+    return;
+  }
+  webCostEvents = webCostEvents.filter((t) => now - t < COST_WINDOW_MS);
+  if (webCostEvents.length >= COST_MAX_PER_DAY) throw new HttpError(402, 'Daily demo limit reached — please try again tomorrow.');
+  webCostEvents.push(now);
+}
+
+// The Anna edition runs in a sandboxed iframe (opaque `null` origin) on the
+// Anna host, so the API must be callable cross-origin. No cookies or ambient
+// credentials are used, so a permissive CORS policy exposes nothing extra.
+app.use(
+  '/api/*',
+  cors({
+    origin: '*',
+    allowMethods: ['GET', 'POST', 'OPTIONS'],
+    allowHeaders: ['Content-Type', 'X-Anywear-Client'],
+    maxAge: 86400,
+  }),
+);
+
+// WEB_DEMO=off: this deployment backs the Anna edition only. The browser web
+// app is not served and non-Anna API calls are refused (the project is open
+// source — run your own copy with your own keys). The header is spoofable, so
+// the Anna daily caps remain the real spend bound.
+const WEB_DEMO = process.env.WEB_DEMO !== 'off';
+const SELF_HOST_MSG = 'This hosted Anywear backend only serves the Anna AI OS app. Anywear is open source — deploy your own: https://github.com/uiharu-kazari/anywear';
 
 // Rate-limit every /api route.
 app.use('/api/*', async (c, next) => {
-  if (c.req.path !== '/api/health') rateLimit(clientIp(c));
+  if (c.req.path !== '/api/health' && c.req.method !== 'OPTIONS') {
+    rateLimit(clientIp(c));
+    if (!WEB_DEMO && clientKind(c) !== 'anna') throw new HttpError(403, SELF_HOST_MSG);
+  }
   await next();
 });
 
@@ -162,7 +205,7 @@ app.post('/api/upload', async (c) => {
 
 app.post('/api/skin/start', async (c) => {
   const { imageBase64, mime } = await readImageBody<{ imageBase64: string; mime: string }>(c);
-  chargeGuard();
+  chargeGuard(c, 'skin');
   const fileId = await uploadImage(decodeImage(imageBase64), mime, 'selfie.jpg');
   const taskId = await startSkinAnalysis(fileId);
   return c.json({ taskId });
@@ -189,7 +232,7 @@ app.post('/api/skin/brief', async (c) => {
 
 app.post('/api/garments/detect', async (c) => {
   const { imageBase64, mime } = await readImageBody<{ imageBase64: string; mime: string }>(c);
-  chargeGuard();
+  chargeGuard(c, 'gemini');
   const garments = await detectGarments(imageBase64.replace(/^data:[^;]+;base64,/, ''), mime);
   return c.json({ garments });
 });
@@ -203,7 +246,7 @@ app.post('/api/vto/start', async (c) => {
     mime: string;
     category: GarmentCategory;
   }>(c);
-  chargeGuard();
+  chargeGuard(c, 'vto');
   const garmentFileId = await uploadImage(decodeImage(body.garmentBase64), body.mime, 'garment.jpg');
   const taskId = await startClothesTryOn({
     personFileId: body.personFileId,
@@ -277,7 +320,9 @@ app.get('/api/sample/:name', async (c) => {
 // Demo sample assets are always served (the Expo app loads them from here).
 app.use('/samples/*', serveStatic({ root: './public' }));
 
-if (process.env.NODE_ENV === 'production') {
+if (!WEB_DEMO) {
+  app.get('*', (c) => c.text(SELF_HOST_MSG));
+} else if (process.env.NODE_ENV === 'production') {
   app.use('*', serveStatic({ root: './dist' }));
   app.get('*', serveStatic({ path: './dist/index.html' }));
 }

@@ -5,6 +5,7 @@ COPY package.json package-lock.json ./
 RUN npm ci
 COPY tsconfig.json vite.config.ts index.html ./
 COPY server ./server
+COPY shared ./shared
 COPY src ./src
 COPY public ./public
 RUN npm run build
@@ -17,6 +18,7 @@ COPY package.json package-lock.json ./
 # install everything rather than --omit=dev.
 RUN npm ci && npm cache clean --force
 COPY server ./server
+COPY shared ./shared
 COPY public ./public
 COPY --from=build /app/dist ./dist
 EXPOSE 8080

@@ -77,3 +77,15 @@ export async function cropByBox(
   ctx.drawImage(img, x, y, w, h, 0, 0, canvas.width, canvas.height);
   return toDataURL(canvas);
 }
+
+export async function imageSize(src: string): Promise<{ width: number; height: number }> {
+  const img = await loadImage(src);
+  return { width: img.naturalWidth, height: img.naturalHeight };
+}
+
+/** Downscale a data: URL for persistence. Anything else (e.g. a remote URL we
+ * could not read into pixels) is kept as-is rather than failing the save. */
+export async function shrinkForStorage(src: string, maxSide: number, quality = 0.92): Promise<string> {
+  if (!src.startsWith('data:')) return src;
+  return resizeDataURL(src, maxSide, quality).catch(() => src);
+}
