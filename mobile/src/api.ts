@@ -1,8 +1,7 @@
-// Same server as the web app. Defaults to the live Cloud Run backend so the
-// mobile app works out of the box; override with EXPO_PUBLIC_API_BASE_URL to
-// point at a local server (e.g. http://<your-lan-ip>:8931).
-export const API =
-  process.env.EXPO_PUBLIC_API_BASE_URL ?? 'https://anywear-1065701526224.asia-northeast1.run.app';
+// Same server as the web app — run your own (`npm run dev` in the repo root).
+// The default works in the iOS Simulator; on a phone, set
+// EXPO_PUBLIC_API_BASE_URL=http://<your-lan-ip>:8931 (or your deployed URL).
+export const API = process.env.EXPO_PUBLIC_API_BASE_URL ?? 'http://localhost:8931';
 
 export interface DetectedGarment {
   label: string;

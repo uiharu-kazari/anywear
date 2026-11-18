@@ -4,7 +4,7 @@
 
 Built for the [YouCam API Skin AI & Apparel VTO Hackathon](https://youcam-api.devpost.com) (combined *Skin AI + Apparel VTO* topic).
 
-**Live demo: https://anywear-1065701526224.asia-northeast1.run.app** (Cloud Run, Tokyo)
+> **The hosted web demo has been retired.** Anywear is open source: run your own copy with your own keys (see [Run it](#run-it) and [Deploy](#deploy-cloud-run)), or use the [Anna AI OS edition](#anna-ai-os-edition), which needs no keys or server at all.
 
 ![Anywear welcome screen](docs/screenshots/01-welcome.png)
 
@@ -98,7 +98,19 @@ The mobile app runs through **Expo Go** (no build step). Because it targets **Ex
 2. Put the phone on the **same Wi-Fi** as the computer.
 3. **iOS:** scan the QR with the Camera app and tap the banner. **Android:** scan from inside Expo Go. Or in Expo Go choose *Enter URL manually* and type the `exp://<lan-ip>:8082` address the CLI prints.
 
-The QR is a local dev pointer — it only works on the same network while `expo start` is running. For a zero-install experience on any device (and the link to hand judges), use the **live web app** above. On the iOS Simulator, `EXPO_PUBLIC_API_BASE_URL=http://localhost:8931` works as-is. `EXPO_PUBLIC_AUTODEMO=1` makes the app walk the whole demo unattended — handy for screenshots and CI.
+The QR is a local dev pointer — it only works on the same network while `expo start` is running. On the iOS Simulator the default API base (`http://localhost:8931`) works as-is; if you deployed the server (see above), point `EXPO_PUBLIC_API_BASE_URL` at that URL instead. `EXPO_PUBLIC_AUTODEMO=1` makes the app walk the whole demo unattended — handy for screenshots and CI.
+
+## Anna AI OS edition
+
+The [`anna-edition`](https://github.com/uiharu-kazari/anywear/tree/anna-edition) branch packages Anywear as an App for [Anna AI OS](https://anna.partners) (submitted to the Anna App Store). It has **no backend**: every AI step runs on Anna's host APIs and is billed to the user's own Anna credits.
+
+| Step | Anna host API |
+|---|---|
+| Skin read, skin brief, garment detection, stylist verdict | `anna.llm` (vision) |
+| Virtual try-on | `anna.image.generate` (Nano Banana 2) with the twin + garment crop as reference images from `anna.upload` |
+| Twin, selfie, lookbook | `anna.storage` (per-user App storage) |
+
+Build it with `npm run build:anna` and publish from `anna/` with the `anna-app` CLI. Privacy notes: [PRIVACY.md](https://github.com/uiharu-kazari/anywear/blob/anna-edition/PRIVACY.md).
 
 ## Demo assets
 
