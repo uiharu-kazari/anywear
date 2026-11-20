@@ -75,31 +75,6 @@ gcloud run deploy anywear --source . --region asia-northeast1 --allow-unauthenti
   --memory 1Gi --max-instances 3 --env-vars-file run-env.yaml   # YouCam keys + GOOGLE_CLOUD_PROJECT
 ```
 
-## Expo mobile app
-
-`mobile/` contains a React Native (Expo SDK 54) version of the same product — twin + selfie setup, skin scores and daily brief, screenshot try-on with tappable garment detection boxes, hold-to-compare mirror, and the stylist verdict — talking to the same server.
-
-| Home | Skin today + brief | Try-on + verdict |
-|---|---|---|
-| <img src="docs/screenshots/07-mobile-home.png" width="230"> | <img src="docs/screenshots/05-mobile-skin.png" width="230"> | <img src="docs/screenshots/06-mobile-verdict.png" width="230"> |
-
-Waiting states are crafted, not spinners: a face-scan animation while Skin Analysis runs, a viewfinder sweep during garment detection, and a stitched-hanger "tailoring" card while the try-on generates — each with rotating captions tied to the actual work.
-
-### Run it on your phone
-
-The mobile app runs through **Expo Go** (no build step). Because it targets **Expo SDK 54**, the phone's Expo Go must be the SDK-54 build — install "Expo Go" from the App Store / Play Store.
-
-1. Start the backend and the Expo dev server, pointing the app at your machine's LAN IP so the phone can reach the API:
-   ```bash
-   npm install && npm run dev                       # in the repo root: API :8931 + web :5173
-   cd mobile && npm install
-   EXPO_PUBLIC_API_BASE_URL=http://<your-lan-ip>:8931 npx expo start   # prints a QR
-   ```
-2. Put the phone on the **same Wi-Fi** as the computer.
-3. **iOS:** scan the QR with the Camera app and tap the banner. **Android:** scan from inside Expo Go. Or in Expo Go choose *Enter URL manually* and type the `exp://<lan-ip>:8082` address the CLI prints.
-
-The QR is a local dev pointer — it only works on the same network while `expo start` is running. On the iOS Simulator the default API base (`http://localhost:8931`) works as-is; if you deployed the server (see above), point `EXPO_PUBLIC_API_BASE_URL` at that URL instead. `EXPO_PUBLIC_AUTODEMO=1` makes the app walk the whole demo unattended — handy for screenshots and CI.
-
 ## Anna AI OS edition
 
 The [`anna-edition`](https://github.com/uiharu-kazari/anywear/tree/anna-edition) branch packages Anywear as an App for [Anna AI OS](https://anna.partners) (submitted to the Anna App Store). It has **no backend**: every AI step runs on Anna's host APIs and is billed to the user's own Anna credits.

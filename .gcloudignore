@@ -1,6 +1,5 @@
 node_modules
 dist
-mobile
 docs
 scripts
 .env
