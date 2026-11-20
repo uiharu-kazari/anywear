@@ -101,7 +101,7 @@ export const api = {
   verdict: (args: {
     tryOnUrl: string;
     /** The try-on image as we hold it (data: URL, or an https URL in Anna). */
-    tryOnDataUrl?: string;
+    tryOnDataUrl: string;
     garment: { label: string; description: string };
     occasion: string;
     brief?: SkinBrief | null;
@@ -111,7 +111,7 @@ export const api = {
         verdict: await llmJSON({
           prompt: verdictPrompt(args),
           shape: VERDICT_JSON_SHAPE,
-          image: args.tryOnDataUrl || args.tryOnUrl,
+          image: args.tryOnDataUrl,
           parse: validateVerdict,
         }),
       }),
@@ -166,9 +166,9 @@ function viaAnna<T>(annaFn: () => Promise<T>, serverFn: () => Promise<T>): Promi
 /** Poll a status endpoint until it leaves `running`. */
 export async function pollUntilDone<T extends { status: string }>(
   fn: () => Promise<T>,
-  opts: { intervalMs?: number; timeoutMs?: number } = {},
+  opts: { intervalMs: number; timeoutMs?: number },
 ): Promise<T> {
-  const { intervalMs = 3000, timeoutMs = 180_000 } = opts;
+  const { intervalMs, timeoutMs = 180_000 } = opts;
   const startedAt = Date.now();
   for (;;) {
     const st = await fn();

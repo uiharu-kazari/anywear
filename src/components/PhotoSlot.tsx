@@ -6,7 +6,6 @@ export default function PhotoSlot(props: {
   hint: string;
   photo: string | null;
   onPhoto: (dataUrl: string) => void;
-  tall?: boolean;
 }) {
   const id = useId();
   const inputRef = useRef<HTMLInputElement>(null);
@@ -18,9 +17,7 @@ export default function PhotoSlot(props: {
       <button
         type="button"
         onClick={() => inputRef.current?.click()}
-        className={`group relative overflow-hidden rounded-2xl border border-line bg-paper transition hover:border-sage ${
-          props.tall ? 'aspect-[3/4]' : 'aspect-square'
-        } w-full`}
+        className="group relative aspect-[3/4] w-full overflow-hidden rounded-2xl border border-line bg-paper transition hover:border-sage"
       >
         {props.photo ? (
           <>

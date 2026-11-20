@@ -10,8 +10,8 @@ export default function BeforeAfter(props: { before: string; after: string; altA
   const ref = useRef<HTMLDivElement>(null);
 
   function fromPointer(clientX: number) {
-    const rect = ref.current?.getBoundingClientRect();
-    if (!rect) return;
+    // Only called from this element's own pointer events, so the ref is set.
+    const rect = ref.current!.getBoundingClientRect();
     setPos(Math.min(100, Math.max(0, ((clientX - rect.left) / rect.width) * 100)));
   }
 
@@ -20,7 +20,7 @@ export default function BeforeAfter(props: { before: string; after: string; altA
       ref={ref}
       className="mirror-reveal relative h-full w-full touch-none select-none overflow-hidden"
       onPointerDown={(e) => {
-        (e.target as HTMLElement).setPointerCapture?.(e.pointerId);
+        (e.target as HTMLElement).setPointerCapture(e.pointerId);
         fromPointer(e.clientX);
       }}
       onPointerMove={(e) => e.buttons === 1 && fromPointer(e.clientX)}

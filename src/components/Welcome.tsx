@@ -26,10 +26,9 @@ export default function Welcome() {
     }
   }
 
-  async function finishSetup() {
-    if (!twinDraft) return;
+  async function finishSetup(twin: string) {
     if (selfieDraft) setSelfie(selfieDraft);
-    await setTwin(twinDraft);
+    await setTwin(twin);
   }
 
   return (
@@ -67,14 +66,12 @@ export default function Welcome() {
           <div className="mt-10 max-w-md">
             <div className="grid grid-cols-2 gap-4">
               <PhotoSlot
-                tall
                 label="Full-body photo · required"
                 hint="Front-facing, standing, whole body in frame"
                 photo={twinDraft}
                 onPhoto={setTwinDraft}
               />
               <PhotoSlot
-                tall
                 label="Selfie · for skin analysis"
                 hint="Close up, bare face, even light"
                 photo={selfieDraft}
@@ -84,7 +81,7 @@ export default function Welcome() {
             <div className="mt-6 flex items-center gap-4">
               <button
                 type="button"
-                onClick={finishSetup}
+                onClick={() => finishSetup(twinDraft!)}
                 disabled={!twinDraft}
                 className="rounded-full bg-sage-deep px-7 py-3.5 text-sm font-medium text-white transition hover:bg-ink disabled:cursor-not-allowed disabled:opacity-40"
               >

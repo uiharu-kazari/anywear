@@ -14,7 +14,7 @@ export default function Lookbook() {
           <button
             key={e.id}
             type="button"
-            onClick={() => openLookbookEntry(e.id)}
+            onClick={() => openLookbookEntry(e)}
             className="group w-24 shrink-0 text-left"
             title={`${e.garmentLabel} — ${e.occasion}`}
           >

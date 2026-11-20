@@ -9,12 +9,21 @@ import MirrorStage from './MirrorStage';
 import VerdictTag from './VerdictTag';
 import Lookbook from './Lookbook';
 
+const RESET_ARM_MS = 4000;
 const OCCASIONS = ['a regular day out', 'the office', 'a first date', 'a job interview', 'a wedding guest look', 'a night out'];
 
 export default function Studio() {
   const { occasion, setOccasion, submitScreenshot, resetAll, stage, verdictStatus, requestVerdict } = useStore();
   const [units, setUnits] = useState<number | null>(null);
   const [custom, setCustom] = useState('');
+  const [armReset, setArmReset] = useState(false);
+
+  // An armed "Start fresh" disarms itself if not confirmed within a few seconds.
+  useEffect(() => {
+    if (!armReset) return;
+    const t = setTimeout(() => setArmReset(false), RESET_ARM_MS);
+    return () => clearTimeout(t);
+  }, [armReset]);
 
   useEffect(() => {
     // Our YouCam unit balance is operator info, not something Anna users need.
@@ -44,14 +53,23 @@ export default function Studio() {
         </p>
         <div className="flex items-center gap-4">
           {units !== null && <span className="tag-label">{units} youcam units</span>}
+          {/* In-page two-step confirm: Anna runs Apps in a sandboxed iframe where
+              window.confirm() is blocked (returns false without a dialog), so a
+              native dialog made this button a no-op. Never use native dialogs. */}
           <button
             type="button"
             onClick={() => {
-              if (window.confirm('Clear your photos, skin reading and lookbook?')) resetAll();
+              if (armReset) {
+                setArmReset(false);
+                resetAll();
+              } else {
+                setArmReset(true);
+              }
             }}
-            className="text-xs text-ink-soft underline-offset-2 hover:underline"
+            aria-live="polite"
+            className={`text-xs underline-offset-2 hover:underline ${armReset ? 'font-medium text-brick' : 'text-ink-soft'}`}
           >
-            Start fresh
+            {armReset ? 'Click again to clear photos, skin reading & lookbook' : 'Start fresh'}
           </button>
         </div>
       </header>

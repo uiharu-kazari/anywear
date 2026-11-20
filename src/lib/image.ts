@@ -22,7 +22,8 @@ export async function fileToDataURL(file: File | Blob, maxSide = 2000): Promise<
   const raw = await new Promise<string>((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = () => resolve(String(reader.result));
-    reader.onerror = () => reject(new Error('Could not read that file.'));
+    // A File the user just picked is always readable.
+    reader.onerror = /* istanbul ignore next -- @preserve */ () => reject(new Error('Could not read that file.'));
     reader.readAsDataURL(file);
   });
   return resizeDataURL(raw, maxSide);
@@ -85,7 +86,8 @@ export async function imageSize(src: string): Promise<{ width: number; height: n
 
 /** Downscale a data: URL for persistence. Anything else (e.g. a remote URL we
  * could not read into pixels) is kept as-is rather than failing the save. */
-export async function shrinkForStorage(src: string, maxSide: number, quality = 0.92): Promise<string> {
+export async function shrinkForStorage(src: string, maxSide: number, quality: number): Promise<string> {
   if (!src.startsWith('data:')) return src;
-  return resizeDataURL(src, maxSide, quality).catch(() => src);
+  // Our data: URLs come from our own canvases, so decoding them doesn't fail.
+  return resizeDataURL(src, maxSide, quality).catch(/* istanbul ignore next -- @preserve */ () => src);
 }

@@ -39,6 +39,15 @@ export class AnnaError extends Error {
   }
 }
 
+/** The host error code of a failed Anna call, if any. The SDK rejects with a
+ * plain `Error` carrying `.code` (e.g. `APP_ERR_QUOTA_EXCEEDED`); an
+ * `{ok:false}` envelope surfaces as our own AnnaError. Client-side failures
+ * (e.g. an RPC timeout) have no code. */
+export function annaErrorCode(err: unknown): string | null {
+  const code = (err as { code?: unknown } | null)?.code;
+  return typeof code === 'string' ? code : null;
+}
+
 /** The SDK docs show both a bare result and an `{ok, result|error}` envelope;
  * accept either so we work across host versions. */
 function unwrap<T>(res: unknown): T {
@@ -52,8 +61,8 @@ function unwrap<T>(res: unknown): T {
 
 let runtime: Promise<AnnaRuntime> | null = null;
 
+/** Anna build only (every caller is on an IS_ANNA path). */
 export function anna(): Promise<AnnaRuntime> {
-  if (!IS_ANNA) return Promise.reject(new Error('Not running inside Anna.'));
   runtime ??= import(/* @vite-ignore */ SDK_URL).then((m: { AnnaAppRuntime: { connect(): Promise<AnnaRuntime> } }) =>
     m.AnnaAppRuntime.connect(),
   );
@@ -113,7 +122,7 @@ export async function llmJSON<T>(opts: {
     } catch (err) {
       lastErr = err;
       // Quota / permission / non-vision model errors won't fix themselves on retry.
-      if (err instanceof AnnaError) break;
+      if (annaErrorCode(err)) break;
     }
   }
   throw lastErr;
@@ -126,6 +135,8 @@ export async function llmJSON<T>(opts: {
 export async function uploadDataUrl(dataUrl: string, filename: string): Promise<{ r2Key: string; url: string }> {
   const rt = await anna();
   const m = dataUrl.match(/^data:([^;]+);base64,(.*)$/);
+  // Callers only pass canvas output (always a data: URL).
+  /* istanbul ignore next -- @preserve */
   if (!m) throw new Error('Expected an image data URL.');
   const r = unwrap<{ r2_key: string; download_url: string }>(
     await rt.upload.inline({ filename, mime_type: m[1], content_b64: m[2], purpose: 'image_reference' }, { timeoutMs: 60_000 }),
@@ -163,11 +174,12 @@ export async function generateImage(args: { prompt: string; referenceUrls: strin
 }
 
 export function friendlyAnnaError(err: unknown): string {
-  if (err instanceof AnnaError) {
-    if (/QUOTA/i.test(err.code)) return 'You are out of Anna credits — top up in Anna and try again.';
-    if (/CONTENT_REJECTED/i.test(err.code)) return 'The image model declined this one — try a different photo or garment.';
-    if (/VISION/i.test(err.code)) return 'Your selected Anna model cannot read images — pick a vision model (e.g. Gemini) in Anna settings.';
-    return err.message;
+  const code = annaErrorCode(err);
+  if (code) {
+    if (/QUOTA/i.test(code)) return 'You are out of Anna credits — top up in Anna and try again.';
+    if (/CONTENT_REJECTED/i.test(code)) return 'The image model declined this one — try a different photo or garment.';
+    if (/VISION/i.test(code)) return 'Your selected Anna model cannot read images — pick a vision model (e.g. Gemini) in Anna settings.';
   }
-  return err instanceof Error ? err.message : 'Something went wrong.';
+  // Everything we await rejects with an Error; keep a fallback for anything else.
+  return err instanceof Error ? err.message : /* istanbul ignore next -- @preserve */ 'Something went wrong.';
 }

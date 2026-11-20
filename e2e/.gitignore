@@ -1,0 +1,4 @@
+.build/
+.nyc_output/
+.results/
+coverage/

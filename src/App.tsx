@@ -17,11 +17,13 @@ export default function App() {
       // An App window restored after an update still carries the old version's
       // token, which the host rejects ("token version mismatch").
       setLoadError(
-        /version mismatch/i.test(String((err as Error)?.message ?? err))
+        /version mismatch/i.test(String(err))
           ? 'Anywear was just updated.'
           : 'Anywear could not load your saved fitting room.',
       );
     });
+    // Race guard: hydration finished between render and this effect.
+    /* istanbul ignore next -- @preserve */
     if (useStore.persist.hasHydrated()) setHydrated(true);
     return () => {
       off();

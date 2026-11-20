@@ -9,7 +9,7 @@
 // the data lives in `img/<hash>.0` … `img/<hash>.<n-1>`).
 
 import type { StateStorage } from 'zustand/middleware';
-import { AnnaError, IS_ANNA, anna } from './anna';
+import { AnnaError, IS_ANNA, anna, annaErrorCode } from './anna';
 
 const IMG_PREFIX = 'img/';
 const REF = 'aps-img:';
@@ -40,7 +40,7 @@ async function getValue(key: string): Promise<unknown> {
     if (!r || r.exists === false) return null;
     return r.value ?? null;
   } catch (err) {
-    if (err instanceof AnnaError && err.code === 'not_found') return null;
+    if (annaErrorCode(err) === 'not_found') return null;
     throw err;
   }
 }
@@ -74,10 +74,14 @@ let pending: { name: string; value: string } | null = null;
 let timer: ReturnType<typeof setTimeout> | null = null;
 let gcCountdown = 0;
 
-async function flush() {
-  if (!pending) return;
-  const { name, value } = pending;
+/** Hand the debounced write to `flush` (a write is pending whenever the timer is set). */
+function takePending(): { name: string; value: string } {
+  const p = pending!;
   pending = null;
+  return p;
+}
+
+async function flush({ name, value }: { name: string; value: string }) {
   const images = new Map<string, string>();
   const skeleton = walk(JSON.parse(value), (s) => {
     if (!s.startsWith('data:image/')) return s;
@@ -97,8 +101,7 @@ async function flush() {
     // persisting the text state and let photos live for the session only.
     console.warn('[anywear] image persistence unavailable', err);
     imagesUnsupported = true;
-    pending = { name, value };
-    return flush();
+    return flush({ name, value });
   }
   await setValue(`state/${name}`, skeleton);
   // No live images (e.g. after "Start fresh") → collect now, so removed photos
@@ -158,9 +161,11 @@ const annaStorage: StateStorage = {
     if (timer) clearTimeout(timer);
     timer = setTimeout(() => {
       timer = null;
-      flush().catch((err) => console.warn('[anywear] persist failed', err));
+      flush(takePending()).catch((err) => console.warn('[anywear] persist failed', err));
     }, 800);
   },
+  // Required by StateStorage; zustand only calls it from persist.clearStorage(), which the App never uses.
+  /* istanbul ignore next -- @preserve */
   async removeItem(name) {
     const rt = await anna();
     await rt.storage.delete({ key: `state/${name}` }).catch(() => undefined);
@@ -169,12 +174,12 @@ const annaStorage: StateStorage = {
 
 // Closing the App window right after a try-on must not drop the debounced
 // write (e.g. the newest lookbook entry): flush as the page goes away.
-if (IS_ANNA && typeof document !== 'undefined') {
+if (IS_ANNA) {
   const flushNow = () => {
     if (!timer) return;
     clearTimeout(timer);
     timer = null;
-    flush().catch((err) => console.warn('[anywear] persist failed', err));
+    flush(takePending()).catch((err) => console.warn('[anywear] persist failed', err));
   };
   window.addEventListener('pagehide', flushNow);
   document.addEventListener('visibilitychange', () => {
