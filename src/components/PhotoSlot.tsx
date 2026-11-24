@@ -21,7 +21,7 @@ export default function PhotoSlot(props: {
       >
         {props.photo ? (
           <>
-            <img src={props.photo} alt={props.label} className="h-full w-full object-cover" />
+            <img src={props.photo} alt={props.label} className="h-full w-full object-contain" />
             <span className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-ink/60 to-transparent px-3 pt-8 pb-2 text-left text-xs font-medium text-white opacity-0 transition group-hover:opacity-100">
               Replace photo
             </span>

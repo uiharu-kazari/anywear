@@ -371,6 +371,20 @@ test.describe('try-on', () => {
     }
   });
 
+  test('tall phone-photo twin keeps its 9:16 frame', async ({ anna, host }) => {
+    await anna.open();
+    await anna.ui.getByRole('button', { name: 'Use my own photos' }).click();
+    await anna.ui.getByLabel('Full-body photo · required').setInputFiles(fixture('tall.jpg'));
+    await anna.ui.getByRole('button', { name: 'Enter the fitting room' }).click();
+    await tryOnBlazer(anna);
+    const gen = host.calls.filter((c) => c.method === 'generate').at(-1)!.args;
+    expect(gen.aspect_ratio).toBe('9:16');
+    expect(gen.size).toBe('576x1024');
+    // The whole photo is shown, never cropped to the stage's shape.
+    await expect(anna.ui.getByRole('img', { name: 'You wearing Camel blazer' })).toHaveCSS('object-fit', 'contain');
+    await expect(anna.ui.getByRole('img', { name: 'Your full-body photo' })).toHaveCSS('object-fit', 'contain');
+  });
+
   test('landscape twin; result the App cannot read stays a URL', async ({ anna, host }) => {
     await anna.open();
     await anna.ui.getByRole('button', { name: 'Use my own photos' }).click();
@@ -380,8 +394,12 @@ test.describe('try-on', () => {
     host.cdnStatus = 403;
     await tryOnBlazer(anna);
     const gen = host.calls.filter((c) => c.method === 'generate').at(-1)!.args;
-    expect(gen.aspect_ratio).toBe('4:3');
-    expect(gen.size).toBe('1024x768');
+    // A landscape twin still gets a full-length portrait try-on (a wide frame
+    // made the model zoom in on the torso and drop the head and legs).
+    expect(gen.aspect_ratio).toBe('3:4');
+    expect(gen.size).toBe('768x1024');
+    expect(gen.prompt).toContain('full-length, head-to-toe');
+    expect(gen.prompt).toContain('Never crop, zoom in on, or cut off the head');
     // The verdict is asked about the remote URL; the lookbook keeps the URL.
     await expect(anna.ui.getByText('87/100')).toBeVisible();
     const verdictCall = host.calls.filter((c) => c.method === 'complete').at(-1)!.args;

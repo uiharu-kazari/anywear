@@ -57,7 +57,7 @@ export default function SkinPanel() {
             <img
               src={maskUrl ?? selfiePhoto}
               alt="Your selfie"
-              className="aspect-[3/4] w-full object-cover"
+              className="aspect-[3/4] w-full bg-ink/5 object-contain"
               onError={() => setMaskUrl(null)}
             />
             {maskLabel && maskUrl && (

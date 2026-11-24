@@ -18,7 +18,7 @@ export default function BeforeAfter(props: { before: string; after: string; altA
   return (
     <div
       ref={ref}
-      className="mirror-reveal relative h-full w-full touch-none select-none overflow-hidden"
+      className="mirror-reveal relative h-full w-full touch-none bg-paper select-none overflow-hidden"
       onPointerDown={(e) => {
         (e.target as HTMLElement).setPointerCapture(e.pointerId);
         fromPointer(e.clientX);
@@ -26,13 +26,13 @@ export default function BeforeAfter(props: { before: string; after: string; altA
       onPointerMove={(e) => e.buttons === 1 && fromPointer(e.clientX)}
     >
       {/* base layer: the try-on result */}
-      <img src={props.after} alt={props.altAfter} className="absolute inset-0 h-full w-full object-cover" />
+      <img src={props.after} alt={props.altAfter} className="absolute inset-0 h-full w-full object-contain" />
       {/* top layer: the original photo, clipped to the left of the divider */}
       <img
         src={props.before}
         alt=""
         aria-hidden
-        className="absolute inset-0 h-full w-full object-cover"
+        className="absolute inset-0 h-full w-full bg-paper object-contain"
         style={{ clipPath: `inset(0 ${100 - pos}% 0 0)` }}
       />
       {/* handle at the divider */}

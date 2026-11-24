@@ -19,7 +19,7 @@ export default function Lookbook() {
             title={`${e.garmentLabel} — ${e.occasion}`}
           >
             <span className="block overflow-hidden rounded-xl border border-line transition group-hover:border-sage">
-              <img src={e.result} alt={`Try-on: ${e.garmentLabel}`} className="aspect-[3/4] w-full object-cover" />
+              <img src={e.result} alt={`Try-on: ${e.garmentLabel}`} className="aspect-[3/4] w-full bg-ink/5 object-contain" />
             </span>
             <span className="mt-1 flex items-center gap-1">
               {e.verdict && (

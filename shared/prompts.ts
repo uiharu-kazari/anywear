@@ -136,9 +136,10 @@ export function tryOnPrompt(garment: { label: string; description: string; categ
         ? 'Replace only their bottoms with this garment; keep their existing top, shoes and accessories.'
         : 'Replace their outfit with this garment; keep their shoes and accessories unless the garment covers them.';
   return `Virtual try-on. The FIRST reference image is the person. The SECOND reference image is a garment: ${garment.label}${garment.description ? ` — ${garment.description}` : ''}.
-Create a photorealistic photo of exactly the same person from the first image — same face, identity, hair, skin tone, body shape, pose, framing, background and lighting — now wearing the garment from the second image.
+Create a photorealistic photo of exactly the same person from the first image — same face, identity, hair, skin tone, body shape, pose, background and lighting — now wearing the garment from the second image.
 ${scope}
 Reproduce the garment faithfully: same color, print/pattern, fabric texture, neckline, sleeves, length and silhouette, draped naturally on their body with realistic folds and shadows. Ignore any people, text, prices or UI in the garment image.
+FRAMING (most important): a full-length, head-to-toe portrait shot so the whole outfit is visible. The entire head with the full face and hair, and the feet with shoes, must be inside the frame with a little space above the head and below the feet. Never crop, zoom in on, or cut off the head, face, legs or feet. If the first image is already full-length, keep its framing; if it is cropped (a headshot, half-body or waist-up photo), zoom out and naturally extend the person and background to a full-length view, consistent with their body shape.
 Output a single natural photo with no text, borders or collage.`;
 }
 

@@ -236,11 +236,13 @@ export const useStore = create<AnywearState>()(
             // work from an older session stops at its next await (sessionScope).
             const twinPhoto = get().twinPhoto!;
             const { width, height } = await live(imageSize(twinPhoto));
-            // Match the twin photo's framing so before/after line up.
-            const ratios: [string, number][] = [['9:16', 9 / 16], ['2:3', 2 / 3], ['3:4', 3 / 4], ['4:5', 4 / 5], ['1:1', 1], ['5:4', 5 / 4], ['4:3', 4 / 3], ['3:2', 3 / 2], ['16:9', 16 / 9]];
+            // Always a full-length portrait frame (a square or landscape output
+            // made the model zoom in on the torso). For portrait twins, match the
+            // photo's own ratio so before/after line up.
+            const ratios: [string, number][] = [['9:16', 9 / 16], ['2:3', 2 / 3], ['3:4', 3 / 4]];
             const r = width / height;
             const [aspectRatio, best] = ratios.reduce((a, b) => (Math.abs(Math.log(b[1] / r)) < Math.abs(Math.log(a[1] / r)) ? b : a));
-            const size = best < 1 ? `${Math.round((1024 * best) / 16) * 16}x1024` : `1024x${Math.round(1024 / best / 16) * 16}`;
+            const size = `${Math.round((1024 * best) / 16) * 16}x1024`;
             const { url, twinKey } = await live(annaApi.tryOn({ twinKey: get().twinFileId, twinPhoto, garment, size, aspectRatio }));
             if (get().twinPhoto === twinPhoto) set({ twinFileId: twinKey });
             // Anna result URLs expire in ~30 min; keep the pixels when the host

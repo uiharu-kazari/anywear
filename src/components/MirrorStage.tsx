@@ -128,7 +128,7 @@ export default function MirrorStage() {
 
       {stage.phase === 'running' && twinPhoto && (
         <div className="scanline relative flex-1">
-          <img src={twinPhoto} alt="You" className="h-full w-full object-cover opacity-90" />
+          <img src={twinPhoto} alt="You" className="h-full w-full object-contain opacity-90" />
           <div className="absolute right-4 bottom-4 w-20 overflow-hidden rounded-lg border-2 border-paper shadow-lg">
             <img src={stage.garment.crop} alt={stage.garment.label} className="aspect-[3/4] w-full object-cover" />
           </div>

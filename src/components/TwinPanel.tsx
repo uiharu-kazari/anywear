@@ -7,7 +7,7 @@ export default function TwinPanel() {
     <section className="rounded-2xl border border-line bg-paper p-4">
       <h2 className="tag-label mb-3">Your twin</h2>
       <label className="group relative block cursor-pointer overflow-hidden rounded-xl">
-        {twinPhoto && <img src={twinPhoto} alt="Your full-body photo" className="aspect-[3/4] w-full object-cover" />}
+        {twinPhoto && <img src={twinPhoto} alt="Your full-body photo" className="aspect-[3/4] w-full bg-ink/5 object-contain" />}
         <span className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-ink/60 to-transparent px-3 pt-8 pb-2 text-xs font-medium text-white opacity-0 transition group-hover:opacity-100">
           Replace photo
         </span>

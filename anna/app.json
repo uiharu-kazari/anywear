@@ -1,6 +1,6 @@
 {
   "slug": "anywear",
-  "version": "0.1.7",
+  "version": "0.1.8",
   "name": "Anywear",
   "tagline": "Screenshot any look — see it on your own body in seconds, judged honestly for your skin, your colors and your day.",
   "description": "Anywear is an AI fitting room. Add one full-body photo to create your fitting-room double, and an optional bare-faced selfie for a daily skin read.\n\n• Skin today — your Anna AI reads a selfie for six skin concerns and turns them into a daily brief with a wearable color palette for today.\n• Try anything you see — drop or paste any screenshot (shop page, social post, street photo). Anywear finds every garment, crops it, and generates a virtual try-on on your own body.\n• Stylist verdict — an AI stylist looks at the actual try-on, your skin brief and your occasion, then says Wear it / Maybe / Skip with honest reasons and pairing ideas.\n• Lookbook — every judged look is saved to your Anna account for side-by-side deciding.\n\nThe skin read is styling guidance, not medical advice. Try-on is a visual preview, not a size simulator.\n\nEverything runs on Anna's own AI models and is billed to your Anna credits — no extra accounts or subscriptions.",
