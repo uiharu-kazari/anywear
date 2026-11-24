@@ -146,9 +146,14 @@ test.describe('skin today', () => {
       bare({ content: [{ type: 'text', text: JSON.stringify({ scores: { redness: 140, oiliness: -3, moisture: 60, radiance: 70.6 }, skin_type: 'oily-ish' }) }] });
     host.llm.brief = () => reject(undefined, 'network');
     await ui.getByRole('button', { name: 'Retry' }).click();
-    await expect(ui.getByText('Brief unavailable.')).toBeVisible();
+    await expect(ui.getByText("Today's brief didn't come through.")).toBeVisible();
     await expect(ui.getByText('100', { exact: true })).toBeVisible(); // clamped
     await expect(ui.getByText(/^type ·/)).toHaveCount(0);
+
+    // The brief alone can be retried.
+    host.llm.brief = () => llmText(JSON.stringify(BRIEF));
+    await ui.getByRole('button', { name: 'Retry' }).click();
+    await expect(ui.getByText(BRIEF.headline, { exact: false })).toBeVisible();
 
     // Re-read: valid type, a brief whose swatches/care items are partly junk.
     host.llm.skin = (_a, attempt) =>
@@ -179,7 +184,7 @@ test.describe('skin today', () => {
     for (const bad of ['null', JSON.stringify({ headline: 'x', summary: 'y', palette: { wear: [] } })]) {
       host.llm.brief = () => llmText(bad);
       await ui.getByRole('button', { name: 'Re-read' }).click();
-      await expect(ui.getByText('Brief unavailable.')).toBeVisible();
+      await expect(ui.getByText("Today's brief didn't come through.")).toBeVisible();
     }
 
     // Default read + full brief.
@@ -190,8 +195,9 @@ test.describe('skin today', () => {
     await expect(ui.getByText(BRIEF.palette.guidance)).toBeVisible();
     await expect(ui.getByText('Reading your skin…')).toBeHidden();
 
-    // Anna reads carry no masks: tapping a concern does nothing.
-    await ui.getByRole('button', { name: /Redness/ }).click();
+    // Anna reads carry no masks, so concerns are plain rows, not dead buttons.
+    await expect(ui.getByText('Redness', { exact: true })).toBeVisible();
+    await expect(ui.getByRole('button', { name: /Redness/ })).toHaveCount(0);
     await expect(ui.getByRole('img', { name: 'Your selfie' })).toBeVisible();
   });
 });
@@ -413,7 +419,7 @@ test.describe('try-on', () => {
     await tryOnBlazer(anna);
   });
 
-  test('replacing the twin mid-flight keeps the newer photo', async ({ anna, host }) => {
+  test('replacing the twin mid-flight keeps the newer photo and drops the old try-on', async ({ anna, host }) => {
     // Twin upload still running when the twin is replaced.
     const upload = gate();
     host.on('upload.inline', async () => {
@@ -438,8 +444,13 @@ test.describe('try-on', () => {
     await expect(anna.ui.getByText('tailoring camel blazer onto you…')).toBeVisible();
     await twinInput.setInputFiles(sample('person.png'));
     await expect.poll(() => host.count('upload.inline')).toBeGreaterThanOrEqual(4);
+    // The try-on made for the old photo is dropped, not shown next to the new one.
+    await expect(anna.ui.getByText('Drop any screenshot')).toBeVisible();
     generating.open();
-    await expect(anna.ui.getByRole('img', { name: 'You wearing Camel blazer' })).toBeVisible();
+    await expect.poll(() => host.count('image.generate')).toBe(1);
+    await anna.page.waitForTimeout(300);
+    await expect(anna.ui.getByRole('img', { name: 'You wearing Camel blazer' })).toHaveCount(0);
+    await expect(anna.ui.getByText('Drop any screenshot')).toBeVisible();
   });
 
   test('Start fresh while a screenshot is being read', async ({ anna, host }) => {
@@ -503,7 +514,8 @@ test.describe('stylist verdict + lookbook', () => {
     await ui.getByRole('button', { name: 'Set', exact: true }).click();
     await expect(ui.getByText('stylist verdict · a gallery opening')).toBeVisible();
 
-    // While a verdict is running, occasion changes don't stack requests.
+    // While a verdict is running, an occasion change asks again; only the
+    // newest answer shows, under the occasion it was written for.
     const judging = gate();
     host.llm.verdict = async () => {
       await judging.wait();
@@ -515,9 +527,11 @@ test.describe('stylist verdict + lookbook', () => {
     await ui.getByRole('button', { name: 'a night out' }).click();
     await ui.getByPlaceholder('or type your own…').fill('brunch');
     await ui.getByRole('button', { name: 'Set', exact: true }).click();
+    await expect.poll(() => host.count('llm.complete')).toBe(calls + 3);
     judging.open();
     await expect(ui.locator('p', { hasText: /✓\s+Wear it/ })).toBeVisible();
-    expect(host.count('llm.complete')).toBe(calls + 1);
+    await expect(ui.getByText('stylist verdict · brunch')).toBeVisible();
+    await expect(book.getByRole('button')).toHaveCount(1);
 
     // Slider: drag, hover without button, keyboard range.
     const mirror = ui.getByRole('img', { name: 'You wearing Camel blazer' });
@@ -539,15 +553,33 @@ test.describe('stylist verdict + lookbook', () => {
     await expect(ui.getByText('The stylist stepped away.')).toBeVisible();
     await expect(book.getByRole('button')).toHaveCount(2);
 
-    // Reopen the blazer look: its saved verdict shows; re-judging is not possible.
+    // Re-judging a look whose verdict failed updates its entry, never duplicates it.
+    await ui.getByRole('button', { name: 'the office' }).click();
+    await expect(ui.getByText('The stylist stepped away.')).toBeVisible();
+    await expect(book.getByRole('button')).toHaveCount(2);
+
+    // Reopen the blazer look: its saved verdict shows under the occasion it was
+    // written for (brunch), not the one selected now (the office).
     await book.getByRole('button', { name: /Camel blazer/ }).click();
     await expect(ui.locator('p', { hasText: /✓\s+Wear it/ })).toBeVisible();
-    // Reopen the dress look: no verdict saved → no tag.
+    await expect(ui.getByText('stylist verdict · brunch')).toBeVisible();
+
+    // Reopen the dress look: no verdict saved → "Ask again" judges it from the
+    // saved image and updates the same entry.
     await book.getByRole('button', { name: /Sage slip dress/ }).click();
-    await expect(ui.getByText('stylist verdict')).toHaveCount(0);
+    await expect(ui.getByText('The stylist stepped away.')).toBeVisible();
+    host.llm.verdict = () => llmText(JSON.stringify(VERDICT));
+    await ui.getByRole('button', { name: 'Ask again' }).click();
+    await expect(ui.getByText('stylist verdict · the office')).toBeVisible();
+    await expect(book.getByRole('button')).toHaveCount(2);
+    await expect(book.getByText('✓')).toHaveCount(2);
+
+    // A reopened look can be re-judged for another occasion too.
     const before = host.count('llm.complete');
-    await ui.getByRole('button', { name: 'the office' }).click();
-    expect(host.count('llm.complete')).toBe(before);
+    await ui.getByRole('button', { name: 'a night out' }).click();
+    await expect(ui.getByText('stylist verdict · a night out')).toBeVisible();
+    expect(host.count('llm.complete')).toBe(before + 1);
+    await expect(book.getByRole('button')).toHaveCount(2);
   });
 
   test('a newer request supersedes an older one (success and failure)', async ({ anna, host }) => {
@@ -593,5 +625,340 @@ test.describe('stylist verdict + lookbook', () => {
     await expect(anna.ui.getByText('Strappy sandals')).toBeVisible();
     const prompt = host.calls.filter((c) => c.method === 'complete').at(-1)!.args.messages[0].content[1].text as string;
     expect(prompt).toContain("Today's skin brief for this user");
+  });
+});
+
+/** Make data: image decoding slow, as on a slow device saving lookbook images. */
+async function slowDecoding(anna: AnnaApp) {
+  await anna.ui.locator('body').evaluate(() => {
+    const desc = Object.getOwnPropertyDescriptor(HTMLImageElement.prototype, 'src')!;
+    Object.defineProperty(HTMLImageElement.prototype, 'src', {
+      configurable: true,
+      get: desc.get,
+      set(v: string) {
+        if (String(v).startsWith('data:')) setTimeout(() => desc.set!.call(this, v), 800);
+        else desc.set!.call(this, v);
+      },
+    });
+  });
+}
+
+// What a reviewer does with their own files and an impatient mouse.
+test.describe('review hardening', () => {
+  test('unreadable files and failed loads explain themselves', async ({ anna, page }) => {
+    await anna.open();
+    const ui = anna.ui;
+    const alert = ui.getByRole('alert');
+
+    // Demo photos that fail to load.
+    await page.route('**/samples/person.png', (r) => r.abort());
+    await ui.getByRole('button', { name: 'Step in with the demo persona' }).click();
+    await expect(alert).toContainText('The demo photos could not be loaded');
+    await page.unroute('**/samples/person.png');
+
+    // A corrupt photo in the welcome slot; dismissed by hand.
+    await ui.getByRole('button', { name: 'Use my own photos' }).click();
+    await ui.getByLabel('Full-body photo · required').setInputFiles(fixture('broken.png'));
+    await expect(alert).toContainText("couldn't be opened as a photo");
+    await expect(ui.getByRole('img', { name: 'Full-body photo · required' })).toHaveCount(0);
+    await ui.getByRole('button', { name: 'Dismiss' }).click();
+    await expect(alert).toHaveCount(0);
+
+    // A transparent PNG lands on white, not black.
+    await ui.getByLabel('Full-body photo · required').setInputFiles(fixture('transparent.png'));
+    const corner = await ui.getByRole('img', { name: 'Full-body photo · required' }).evaluate(async (img: HTMLImageElement) => {
+      await img.decode();
+      const c = document.createElement('canvas');
+      c.width = img.naturalWidth;
+      c.height = img.naturalHeight;
+      const ctx = c.getContext('2d')!;
+      ctx.drawImage(img, 0, 0);
+      return Array.from(ctx.getImageData(2, 2, 1, 1).data);
+    });
+    expect(corner.slice(0, 3).every((v) => v > 245)).toBe(true);
+    await ui.getByLabel('Full-body photo · required').setInputFiles(sample('person.png'));
+    await ui.getByRole('button', { name: 'Enter the fitting room' }).click();
+    await expect(ui.getByText('Drop any screenshot')).toBeVisible();
+
+    // A text file as a screenshot; a sample screenshot that fails to load.
+    await ui.locator('input[type=file][accept="image/*"]').setInputFiles(fixture('notes.txt'));
+    await expect(alert).toContainText("couldn't be opened as a photo");
+    await page.route('**/samples/garment_jacket.png', (r) => r.abort());
+    await ui.getByRole('button', { name: 'Dismiss' }).click();
+    await ui.getByRole('button', { name: 'Blazer product shot' }).click();
+    await expect(alert).toContainText("couldn't be opened as a photo");
+    await expect(ui.getByText('Drop any screenshot')).toBeVisible();
+
+    // A corrupt replacement twin leaves the current one in place.
+    const twinInput = ui.locator('section', { hasText: 'Your twin' }).locator('input[type=file]');
+    await twinInput.setInputFiles(fixture('broken.png'));
+    await expect(ui.getByRole('img', { name: 'Your full-body photo' })).toBeVisible();
+  });
+
+  test('notices dismiss themselves', async ({ anna, page }) => {
+    await page.clock.install();
+    await anna.open();
+    await anna.ui.getByRole('button', { name: 'Use my own photos' }).click();
+    await anna.ui.getByLabel('Full-body photo · required').setInputFiles(fixture('broken.png'));
+    await expect(anna.ui.getByRole('alert')).toBeVisible();
+    await page.clock.fastForward(9000);
+    await expect(anna.ui.getByRole('alert')).toHaveCount(0);
+  });
+
+  test('the selfie can be replaced on its own', async ({ anna, host }) => {
+    await enterStudio(anna);
+    const ui = anna.ui;
+    await ui.getByRole('button', { name: 'Read my skin' }).click();
+    await expect(ui.getByText('Redness', { exact: true })).toBeVisible();
+    const newSelfie = ui.locator('label', { hasText: 'New selfie' }).locator('input');
+    // A bad file keeps the reading; a good one starts a fresh read.
+    await newSelfie.setInputFiles(fixture('broken.png'));
+    await expect(ui.getByRole('alert')).toBeVisible();
+    await expect(ui.getByText('Redness', { exact: true })).toBeVisible();
+    await newSelfie.setInputFiles(sample('person.png'));
+    await expect(ui.getByRole('button', { name: 'Read my skin' })).toBeVisible();
+    await expect(ui.getByRole('img', { name: 'Your full-body photo' })).toBeVisible(); // twin kept
+    expect(host.count('image.generate')).toBe(0);
+  });
+
+  test('picking among overlapping pieces, cancelling, and backing out', async ({ anna, host }) => {
+    await enterStudio(anna);
+    const ui = anna.ui;
+    const OUTFIT = [
+      { label: 'Full outfit', category: 'full_body', box_2d: [60, 330, 900, 690], description: 'outfit', confidence: 0.8 },
+      { label: 'Rust knit sweater', category: 'upper_body', box_2d: [60, 330, 420, 690], description: 'sweater', confidence: 0.95 },
+    ];
+    host.llm.garments = () => llmText(JSON.stringify(OUTFIT));
+
+    // Back out of the pick list.
+    await ui.getByRole('button', { name: 'Street-style photo' }).click();
+    const chip = ui.getByRole('button', { name: 'Rust knit sweater' });
+    await chip.hover();
+    await chip.focus();
+    await chip.blur();
+    await ui.getByRole('button', { name: 'Full outfit' }).hover();
+    await ui.getByRole('button', { name: 'Choose another screenshot' }).click();
+    await expect(ui.getByText('Drop any screenshot')).toBeVisible();
+
+    // The sweater box sits on top of the outfit box, so a click on it picks the sweater.
+    await ui.getByRole('button', { name: 'Street-style photo' }).click();
+    const box = ui.locator('button[title="Rust knit sweater"]');
+    await box.hover();
+    await ui.locator('button[title="Full outfit"]').hover({ position: { x: 10, y: 300 } });
+    const generating = gate();
+    host.on('image.generate', async () => {
+      await generating.wait();
+      return ok({ images: [{ url: 'https://cdn.test/result.jpg' }] });
+    });
+    await box.click();
+    await expect(ui.getByText('tailoring rust knit sweater onto you…')).toBeInViewport();
+
+    // Cancel while generating: the late result is dropped.
+    await ui.getByRole('button', { name: 'Cancel' }).click();
+    await expect(ui.getByText('Drop any screenshot')).toBeVisible();
+    generating.open();
+    await expect.poll(() => host.count('image.generate')).toBe(1);
+    await anna.page.waitForTimeout(300);
+    await expect(ui.getByText('Drop any screenshot')).toBeVisible();
+    host.off('image.generate');
+
+    // Cancel while the screenshot is being read: a late failure is dropped too.
+    const reading = gate();
+    host.llm.garments = async () => {
+      await reading.wait();
+      return reject('APP_PROVIDER_ERROR', 'late failure');
+    };
+    await ui.getByRole('button', { name: 'Blazer product shot' }).click();
+    await expect(ui.getByText('reading the look…')).toBeInViewport();
+    await ui.getByRole('button', { name: 'Cancel' }).click();
+    reading.open();
+    await anna.page.waitForTimeout(300);
+    await expect(ui.getByText('Drop any screenshot')).toBeVisible();
+    await expect(ui.getByText("That one didn't work")).toHaveCount(0);
+    expect(host.count('image.generate')).toBe(1);
+  });
+
+  test('a piece that cannot be cut out says so', async ({ anna, host }) => {
+    await enterStudio(anna);
+    host.llm.garments = () => llmText(JSON.stringify(GARMENTS_TWO));
+    await anna.ui.getByRole('button', { name: 'Street-style photo' }).click();
+    await expect(anna.ui.getByRole('button', { name: 'Sage slip dress' })).toBeVisible();
+    await anna.ui.locator('body').evaluate(() => {
+      HTMLCanvasElement.prototype.toDataURL = () => {
+        throw new Error('canvas too large');
+      };
+    });
+    await anna.ui.getByRole('button', { name: 'Sage slip dress' }).click();
+    await expect(anna.ui.getByText('Could not cut that piece out of the screenshot')).toBeVisible();
+    expect(host.count('image.generate')).toBe(0);
+  });
+
+  test('a failed re-judge keeps the verdict the look already had', async ({ anna, host }) => {
+    await enterStudio(anna);
+    const ui = anna.ui;
+    const book = ui.getByRole('region', { name: 'Lookbook' });
+    await tryOnBlazer(anna);
+    await expect(ui.getByText('87/100')).toBeVisible();
+    await expect(book.getByText('✓')).toHaveCount(1);
+
+    host.llm.verdict = () => reject(undefined, 'busy');
+    await ui.getByRole('button', { name: 'the office' }).click();
+    await expect(ui.getByText('The stylist stepped away.')).toBeVisible();
+    await expect(book.getByRole('button')).toHaveCount(1);
+    await expect(book.getByText('✓')).toHaveCount(1);
+
+    // Picking a preset occasion clears a half-typed custom one.
+    const custom = ui.getByPlaceholder('or type your own…');
+    await custom.fill('brunch');
+    await ui.getByRole('button', { name: 'a night out' }).click();
+    await expect(custom).toHaveValue('');
+
+    await ui.getByRole('button', { name: 'Try another' }).click();
+    await book.getByRole('button', { name: /Camel blazer/ }).click();
+    await expect(ui.getByText('87/100')).toBeVisible();
+    await expect(ui.getByText('stylist verdict · a regular day out')).toBeVisible();
+    // The reopened look keeps its garment category.
+    await expect(ui.getByText('upper body', { exact: true })).toBeVisible();
+  });
+
+  test('verdicts racing while the look is saved: the newest wins, one entry', async ({ anna, host }) => {
+    await enterStudio(anna);
+    const ui = anna.ui;
+    const book = ui.getByRole('region', { name: 'Lookbook' });
+    const judging = gate();
+    host.llm.verdict = async () => {
+      await judging.wait();
+      return llmText(JSON.stringify(VERDICT));
+    };
+    await tryOnBlazer(anna);
+    await expect(ui.getByText('Looking you over…')).toBeVisible();
+    // Slow image decoding (a slow device re-encoding the lookbook images).
+    await slowDecoding(anna);
+    judging.open();
+    await expect(ui.getByText('87/100')).toBeVisible();
+    // A second verdict while the first is still saving the look.
+    host.llm.verdict = () => llmText(JSON.stringify({ ...VERDICT, verdict: 'skip', score: 20 }));
+    await ui.getByRole('button', { name: 'the office' }).click();
+    await expect(ui.locator('p', { hasText: /✕\s+Skip it/ })).toBeVisible();
+    await expect(book.getByRole('button')).toHaveCount(1);
+    await expect(book.getByText('✕')).toHaveCount(1);
+    await expect(book.getByText('✓')).toHaveCount(0);
+  });
+
+  test("a new selfie drops the old selfie's brief", async ({ anna, host }) => {
+    await enterStudio(anna);
+    const ui = anna.ui;
+    const old = gate();
+    host.llm.brief = async () => {
+      await old.wait();
+      return llmText(JSON.stringify({ ...BRIEF, headline: 'OLD SELFIE BRIEF' }));
+    };
+    await ui.getByRole('button', { name: 'Read my skin' }).click();
+    await expect(ui.getByText("Writing today's brief…")).toBeVisible();
+    await ui.locator('label', { hasText: 'New selfie' }).locator('input').setInputFiles(sample('selfie.png'));
+    host.llm.brief = () => llmText(JSON.stringify({ ...BRIEF, headline: 'NEW SELFIE BRIEF' }));
+    await ui.getByRole('button', { name: 'Read my skin' }).click();
+    await expect(ui.getByText('NEW SELFIE BRIEF', { exact: false })).toBeVisible();
+    old.open();
+    await anna.page.waitForTimeout(300);
+    await expect(ui.getByText('OLD SELFIE BRIEF', { exact: false })).toHaveCount(0);
+    await expect(ui.getByText('NEW SELFIE BRIEF', { exact: false })).toBeVisible();
+  });
+
+  test("Anna's smallest window (900x620): primary actions stay on screen", async ({ anna, host, page }) => {
+    await anna.open();
+    await page.locator('#app').evaluate((f: HTMLIFrameElement) => {
+      f.style.width = '900px';
+      f.style.height = '620px';
+    });
+    const ui = anna.ui;
+    await ui.getByRole('button', { name: 'Use my own photos' }).click();
+    await expect(ui.getByRole('button', { name: 'Enter the fitting room' })).toBeInViewport();
+    await expect(ui.getByRole('button', { name: 'Back' })).toBeInViewport();
+    await ui.getByRole('button', { name: 'Back' }).click();
+    await ui.getByRole('button', { name: 'Step in with the demo persona' }).click();
+    const generating = gate();
+    host.on('image.generate', async () => {
+      await generating.wait();
+      return ok({ images: [{ url: 'https://cdn.test/result.jpg' }] });
+    });
+    host.llm.garments = () => llmText(JSON.stringify(GARMENT_ONE));
+    await ui.getByRole('button', { name: 'Blazer product shot' }).click();
+    await expect(ui.getByText('tailoring camel blazer onto you…')).toBeInViewport();
+    await expect(ui.getByRole('button', { name: 'Cancel' })).toBeInViewport();
+    generating.open();
+    await expect(ui.getByRole('button', { name: 'Try another' })).toBeInViewport();
+  });
+
+  test('a failing re-judge while the look is still being saved keeps the good verdict', async ({ anna, host }) => {
+    await enterStudio(anna);
+    const ui = anna.ui;
+    const book = ui.getByRole('region', { name: 'Lookbook' });
+    const judging = gate();
+    host.llm.verdict = async () => {
+      await judging.wait();
+      return llmText(JSON.stringify(VERDICT));
+    };
+    await tryOnBlazer(anna);
+    await slowDecoding(anna);
+    judging.open();
+    await expect(ui.getByText('87/100')).toBeVisible();
+    host.llm.verdict = () => reject(undefined, 'busy');
+    await ui.getByRole('button', { name: 'the office' }).click();
+    await expect(ui.getByText('The stylist stepped away.')).toBeVisible();
+    await expect(book.getByText('✓')).toHaveCount(1);
+    await anna.page.waitForTimeout(1200);
+    await expect(book.getByRole('button')).toHaveCount(1);
+    await expect(book.getByText('✓')).toHaveCount(1);
+  });
+
+  test('Start fresh while a verdict is failing: nothing comes back', async ({ anna, host }) => {
+    await enterStudio(anna);
+    const ui = anna.ui;
+    const judging = gate();
+    host.llm.verdict = async () => {
+      await judging.wait();
+      return reject('APP_PROVIDER_ERROR', 'late failure');
+    };
+    await tryOnBlazer(anna);
+    await expect(ui.getByText('Looking you over…')).toBeVisible();
+    await ui.getByRole('button', { name: 'Start fresh' }).click();
+    await ui.getByRole('button', { name: /Click again to clear/ }).click();
+    await expect(ui.getByRole('button', { name: 'Step in with the demo persona' })).toBeVisible();
+    judging.open();
+    await anna.page.waitForTimeout(300);
+    await expect(ui.getByRole('button', { name: 'Step in with the demo persona' })).toBeVisible();
+    expect(host.imageKeys().length).toBe(0);
+  });
+
+  test('a screenshot still loading when Start fresh is clicked is dropped', async ({ anna, host, page }) => {
+    await enterStudio(anna);
+    const ui = anna.ui;
+    const held = gate();
+    await page.route('**/samples/garment_jacket.png', async (r) => {
+      await held.wait();
+      await r.fallback();
+    });
+    host.llm.garments = () => llmText(JSON.stringify(GARMENT_ONE));
+    await ui.getByRole('button', { name: 'Blazer product shot' }).click();
+    await ui.getByRole('button', { name: 'Start fresh' }).click();
+    await ui.getByRole('button', { name: /Click again to clear/ }).click();
+    await expect(ui.getByRole('button', { name: 'Step in with the demo persona' })).toBeVisible();
+    const before = host.count('llm.complete');
+    held.open();
+    await page.waitForTimeout(500);
+    expect(host.count('llm.complete')).toBe(before);
+    await expect(ui.getByRole('button', { name: 'Step in with the demo persona' })).toBeVisible();
+  });
+
+  test('double-clicking Enter uploads the photo once', async ({ anna, host }) => {
+    await anna.open();
+    const ui = anna.ui;
+    await ui.getByRole('button', { name: 'Use my own photos' }).click();
+    await ui.getByLabel('Full-body photo · required').setInputFiles(sample('person.png'));
+    await ui.getByRole('button', { name: 'Enter the fitting room' }).dblclick();
+    await expect(ui.getByText('Drop any screenshot')).toBeVisible();
+    await anna.page.waitForTimeout(300);
+    expect(host.count('upload.inline')).toBe(1);
   });
 });

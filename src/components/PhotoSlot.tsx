@@ -1,5 +1,5 @@
 import { useId, useRef } from 'react';
-import { fileToDataURL } from '../lib/image';
+import { useStore } from '../lib/store';
 
 export default function PhotoSlot(props: {
   label: string;
@@ -8,6 +8,7 @@ export default function PhotoSlot(props: {
   onPhoto: (dataUrl: string) => void;
 }) {
   const id = useId();
+  const readImage = useStore((s) => s.readImage);
   const inputRef = useRef<HTMLInputElement>(null);
   return (
     <div className="flex flex-col gap-2">
@@ -39,12 +40,12 @@ export default function PhotoSlot(props: {
         ref={inputRef}
         id={id}
         type="file"
-        accept="image/jpeg,image/png"
+        accept="image/jpeg,image/png,image/webp"
         className="sr-only"
         onChange={async (e) => {
-          const file = e.target.files?.[0];
-          if (file) props.onPhoto(await fileToDataURL(file));
+          const dataUrl = await readImage(e.target.files?.[0]);
           e.target.value = '';
+          if (dataUrl) props.onPhoto(dataUrl);
         }}
       />
     </div>

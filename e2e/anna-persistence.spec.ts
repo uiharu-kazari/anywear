@@ -1,7 +1,7 @@
 // Anna edition: saving to Anna Persistent Storage, restoring on reopen, and
 // every way the host's storage can answer or fail.
 
-import { GARMENT_ONE, bare, envelopeError, expect, llmText, ok, reject, test, type AnnaApp, type RpcOutcome } from './support/harness';
+import { BRIEF, GARMENT_ONE, bare, envelopeError, expect, gate, llmText, ok, reject, test, type AnnaApp, type RpcOutcome } from './support/harness';
 
 async function enterStudio(anna: AnnaApp) {
   await anna.open();
@@ -182,4 +182,26 @@ test('failed saves and storage clean-up never break the App', async ({ anna, hos
   await hide(anna);
   await expect.poll(() => host.storage.has('img/orphan')).toBe(false);
   expect(host.storage.has('img/orphan.0')).toBe(false);
+});
+
+test('closing while the skin brief is written: reopen offers Retry, not a stuck spinner', async ({ anna, host }) => {
+  await enterStudio(anna);
+  const ui = anna.ui;
+  const writing = gate();
+  host.llm.brief = async () => {
+    await writing.wait();
+    return llmText(JSON.stringify(BRIEF));
+  };
+  await ui.getByRole('button', { name: 'Read my skin' }).click();
+  await expect(ui.getByText("Writing today's brief…")).toBeVisible();
+  // The save records the unfinished brief as failed (it can't resume after a close).
+  await hide(anna);
+  await expect.poll(() => (host.storage.get('state/anywear') as any)?.state?.skin?.briefStatus).toBe('error');
+  await anna.reopen();
+  await expect(ui.getByText('Redness', { exact: true })).toBeVisible();
+  await expect(ui.getByText("Writing today's brief…")).toHaveCount(0);
+  host.llm.brief = () => llmText(JSON.stringify(BRIEF));
+  await ui.getByRole('button', { name: 'Retry' }).click();
+  await expect(ui.getByText(BRIEF.headline, { exact: false })).toBeVisible();
+  writing.open();
 });

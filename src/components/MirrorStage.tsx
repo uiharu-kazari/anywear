@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import { SAMPLES as SAMPLE_DIR } from '../lib/samples';
 import { useStore } from '../lib/store';
-import { fileToDataURL, urlToDataURL } from '../lib/image';
+import { urlToDataURL } from '../lib/image';
+import { UNREADABLE_FILE } from '../lib/store';
 import BeforeAfter from './BeforeAfter';
 
 const SAMPLES = [
@@ -11,13 +12,27 @@ const SAMPLES = [
 ];
 
 export default function MirrorStage() {
-  const { stage, twinPhoto, submitScreenshot, pickGarment, clearStage } = useStore();
+  const { stage, twinPhoto, submitScreenshot, pickGarment, clearStage, readImage, showNotice } = useStore();
   const [dragOver, setDragOver] = useState(false);
+  const [hovered, setHovered] = useState<number | null>(null);
+  // The pick screenshot's width/height, so it (and its boxes) can be scaled to
+  // whatever room the garment list leaves.
+  const [ratio, setRatio] = useState(1);
 
   async function onFiles(files: FileList | null) {
-    const file = files?.[0];
-    if (file && file.type.startsWith('image/')) submitScreenshot(await fileToDataURL(file));
+    const dataUrl = await readImage(files?.[0]);
+    if (dataUrl) submitScreenshot(dataUrl);
   }
+
+  const cancel = (label: string) => (
+    <button
+      type="button"
+      onClick={clearStage}
+      className="absolute top-3 right-3 z-10 rounded-full bg-paper/90 px-3 py-1.5 text-xs font-medium shadow-sm transition hover:bg-paper"
+    >
+      {label}
+    </button>
+  );
 
   return (
     <div
@@ -42,7 +57,7 @@ export default function MirrorStage() {
           </p>
           <p className="max-w-sm text-sm leading-relaxed text-ink-soft">
             A shop page, a social post, a street photo — Anywear finds the clothes in it. Or paste one straight from
-            your clipboard (⌘V).
+            your clipboard (⌘V / Ctrl+V).
           </p>
           <label className="cursor-pointer rounded-full border border-ink/25 px-6 py-3 text-sm font-medium transition hover:border-ink">
             Choose an image
@@ -63,7 +78,13 @@ export default function MirrorStage() {
                 <button
                   key={s.src}
                   type="button"
-                  onClick={async () => submitScreenshot(await urlToDataURL(s.src))}
+                  onClick={async () => {
+                    try {
+                      submitScreenshot(await urlToDataURL(s.src));
+                    } catch {
+                      showNotice(UNREADABLE_FILE);
+                    }
+                  }}
                   className="group w-24 overflow-hidden rounded-xl border border-line transition hover:border-sage"
                   title={s.label}
                 >
@@ -80,59 +101,104 @@ export default function MirrorStage() {
       )}
 
       {stage.phase === 'detecting' && (
-        <div className="scanline relative flex-1">
-          <img src={stage.screenshot} alt="Your screenshot" className="h-full w-full object-contain opacity-80" />
-          <p className="tag-label absolute bottom-4 left-1/2 -translate-x-1/2 rounded-full bg-paper/90 px-4 py-2">
+        <div className="scanline relative min-h-0 flex-1 overflow-hidden">
+          <img src={stage.screenshot} alt="Your screenshot" className="absolute inset-0 h-full w-full object-contain opacity-80" />
+          {cancel('Cancel')}
+          <p className="tag-label absolute bottom-4 left-1/2 max-w-[70%] -translate-x-1/2 rounded-full bg-paper/90 px-4 py-2 text-center">
             reading the look…
           </p>
         </div>
       )}
 
       {stage.phase === 'pick' && (
-        <div className="flex flex-1 flex-col">
-          <div className="relative flex-1">
-            <div className="absolute inset-0 flex items-center justify-center p-3">
-              <div className="relative max-h-full max-w-full">
-                <img src={stage.screenshot} alt="Your screenshot" className="max-h-[56vh] w-auto rounded-lg" />
-                {stage.garments.map((g, i) => {
-                  const [ymin, xmin, ymax, xmax] = g.box_2d;
-                  return (
-                    <button
-                      key={i}
-                      type="button"
-                      onClick={() => pickGarment(g)}
-                      className="group absolute rounded-md border-2 border-white/80 bg-sage/0 outline-2 outline-sage-deep/0 transition hover:bg-sage/15 hover:outline-sage-deep focus-visible:outline-sage-deep"
-                      style={{
-                        top: `${ymin / 10}%`,
-                        left: `${xmin / 10}%`,
-                        width: `${(xmax - xmin) / 10}%`,
-                        height: `${(ymax - ymin) / 10}%`,
-                      }}
-                    >
-                      <span className="tag-label absolute -top-2 left-1 -translate-y-full rounded bg-ink px-1.5 py-0.5 whitespace-nowrap !text-white opacity-90 group-hover:!bg-sage-deep">
-                        {g.label}
-                      </span>
-                    </button>
-                  );
-                })}
+        <div className="flex min-h-0 flex-1 flex-col">
+          <div className="relative min-h-0 flex-1 [container-type:size]">
+            <div className="absolute inset-0 flex items-center justify-center">
+              {/* Largest box of the screenshot's shape that fits the pane (12px margin). */}
+              <div
+                className="relative"
+                style={{
+                  width: `min(calc(100cqw - 24px), calc((100cqh - 24px) * ${ratio}))`,
+                  aspectRatio: String(ratio),
+                }}
+              >
+                <img
+                  src={stage.screenshot}
+                  alt="Your screenshot"
+                  className="absolute inset-0 h-full w-full rounded-lg"
+                  onLoad={(e) => setRatio(e.currentTarget.naturalWidth / e.currentTarget.naturalHeight)}
+                />
+                {/* Biggest boxes first, so smaller pieces inside an outfit box
+                    sit on top and stay clickable. Names are in the list below. */}
+                {stage.garments
+                  .map((g, i) => ({ g, i }))
+                  .sort((a, b) => area(b.g.box_2d) - area(a.g.box_2d))
+                  .map(({ g, i }) => {
+                    const [ymin, xmin, ymax, xmax] = g.box_2d;
+                    return (
+                      <button
+                        key={i}
+                        type="button"
+                        // Mouse shortcut only; the named buttons below serve keyboards
+                        // and screen readers.
+                        aria-hidden
+                        tabIndex={-1}
+                        title={g.label}
+                        onClick={() => pickGarment(g)}
+                        onMouseEnter={() => setHovered(i)}
+                        onMouseLeave={() => setHovered(null)}
+                        className={`absolute rounded-md border-2 transition focus-visible:outline-2 focus-visible:outline-sage-deep ${
+                          hovered === i ? 'border-sage-deep bg-sage/20' : 'border-white/80 hover:bg-sage/15'
+                        }`}
+                        style={{
+                          top: `${ymin / 10}%`,
+                          left: `${xmin / 10}%`,
+                          width: `${(xmax - xmin) / 10}%`,
+                          height: `${(ymax - ymin) / 10}%`,
+                        }}
+                      />
+                    );
+                  })}
               </div>
             </div>
           </div>
           <div className="border-t border-line px-5 py-3 text-center">
-            <p className="text-sm text-ink-soft">
-              Found {stage.garments.length} pieces — tap the one you want on you.
-            </p>
+            <p className="text-sm text-ink-soft">Found {stage.garments.length} pieces — pick the one you want on you:</p>
+            <div className="mt-2 flex flex-wrap justify-center gap-1.5">
+              {stage.garments.map((g, i) => (
+                <button
+                  key={i}
+                  type="button"
+                  onClick={() => pickGarment(g)}
+                  onMouseEnter={() => setHovered(i)}
+                  onMouseLeave={() => setHovered(null)}
+                  onFocus={() => setHovered(i)}
+                  onBlur={() => setHovered(null)}
+                  className="rounded-full border border-ink/25 px-3 py-1.5 text-xs font-medium transition hover:border-sage-deep hover:bg-sage-deep hover:text-white"
+                >
+                  {g.label}
+                </button>
+              ))}
+              <button
+                type="button"
+                onClick={clearStage}
+                className="rounded-full px-3 py-1.5 text-xs text-ink-soft underline-offset-2 hover:underline"
+              >
+                Choose another screenshot
+              </button>
+            </div>
           </div>
         </div>
       )}
 
       {stage.phase === 'running' && twinPhoto && (
-        <div className="scanline relative flex-1">
-          <img src={twinPhoto} alt="You" className="h-full w-full object-contain opacity-90" />
+        <div className="scanline relative min-h-0 flex-1 overflow-hidden">
+          <img src={twinPhoto} alt="You" className="absolute inset-0 h-full w-full object-contain opacity-90" />
+          {cancel('Cancel')}
           <div className="absolute right-4 bottom-4 w-20 overflow-hidden rounded-lg border-2 border-paper shadow-lg">
             <img src={stage.garment.crop} alt={stage.garment.label} className="aspect-[3/4] w-full object-cover" />
           </div>
-          <p className="tag-label absolute bottom-4 left-1/2 -translate-x-1/2 rounded-full bg-paper/90 px-4 py-2">
+          <p className="tag-label absolute bottom-4 left-1/2 max-w-[70%] -translate-x-1/2 rounded-full bg-paper/90 px-4 py-2 text-center">
             tailoring {stage.garment.label.toLowerCase()} onto you…
           </p>
         </div>
@@ -177,4 +243,8 @@ export default function MirrorStage() {
       )}
     </div>
   );
+}
+
+function area([ymin, xmin, ymax, xmax]: [number, number, number, number]): number {
+  return (ymax - ymin) * (xmax - xmin);
 }

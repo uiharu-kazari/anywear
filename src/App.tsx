@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { onHydrationError, useStore } from './lib/store';
 import Welcome from './components/Welcome';
 import Studio from './components/Studio';
+import Notice from './components/Notice';
 
 export default function App() {
   const twinPhoto = useStore((s) => s.twinPhoto);
@@ -44,5 +45,10 @@ export default function App() {
       </div>
     );
   }
-  return twinPhoto ? <Studio /> : <Welcome />;
+  return (
+    <>
+      <Notice />
+      {twinPhoto ? <Studio /> : <Welcome />}
+    </>
+  );
 }

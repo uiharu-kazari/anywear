@@ -113,7 +113,7 @@ test('server failures on the web build', async ({ web, webApi }) => {
   webApi.set('GET /api/skin/status', () => ({ json: { status: 'success' } }));
   webApi.set('POST /api/skin/brief', () => ({ status: 500, json: { error: 'gemini down' } }));
   await ui.getByRole('button', { name: 'Retry' }).click();
-  await expect(ui.getByText('Brief unavailable.')).toBeVisible();
+  await expect(ui.getByText("Today's brief didn't come through.")).toBeVisible();
   expect(webApi.calls.some((c) => c.path === '/api/skin/status/skin%2F2')).toBe(true);
 
   // Detection error.

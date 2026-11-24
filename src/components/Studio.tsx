@@ -2,7 +2,6 @@ import { useEffect, useState } from 'react';
 import { IS_ANNA } from '../lib/anna';
 import { useStore } from '../lib/store';
 import { api } from '../lib/api';
-import { fileToDataURL } from '../lib/image';
 import TwinPanel from './TwinPanel';
 import SkinPanel from './SkinPanel';
 import MirrorStage from './MirrorStage';
@@ -13,7 +12,7 @@ const RESET_ARM_MS = 4000;
 const OCCASIONS = ['a regular day out', 'the office', 'a first date', 'a job interview', 'a wedding guest look', 'a night out'];
 
 export default function Studio() {
-  const { occasion, setOccasion, submitScreenshot, resetAll, stage, verdictStatus, requestVerdict } = useStore();
+  const { occasion, setOccasion, submitScreenshot, readImage, resetAll, stage, requestVerdict } = useStore();
   const [units, setUnits] = useState<number | null>(null);
   const [custom, setCustom] = useState('');
   const [armReset, setArmReset] = useState(false);
@@ -35,12 +34,12 @@ export default function Studio() {
     async function onPaste(e: ClipboardEvent) {
       if ((e.target as HTMLElement | null)?.tagName === 'INPUT') return;
       const item = Array.from(e.clipboardData?.items ?? []).find((i) => i.type.startsWith('image/'));
-      const file = item?.getAsFile();
-      if (file) submitScreenshot(await fileToDataURL(file));
+      const dataUrl = await readImage(item?.getAsFile());
+      if (dataUrl) submitScreenshot(dataUrl);
     }
     window.addEventListener('paste', onPaste);
     return () => window.removeEventListener('paste', onPaste);
-  }, [submitScreenshot]);
+  }, [submitScreenshot, readImage]);
 
   return (
     <div
@@ -74,17 +73,17 @@ export default function Studio() {
         </div>
       </header>
 
-      <main className="mx-auto grid max-w-7xl gap-4 overflow-x-clip px-5 pb-8 lg:grid-cols-[270px_minmax(0,1fr)_320px] lg:items-start">
-        <div className="order-2 flex flex-col gap-4 lg:order-1">
+      <main className="mx-auto grid max-w-7xl gap-4 overflow-x-clip px-5 pb-8 md:grid-cols-[250px_minmax(0,1fr)] md:items-start lg:grid-cols-[270px_minmax(0,1fr)_320px]">
+        <div className="order-2 flex flex-col gap-4 md:order-1">
           <TwinPanel />
           <SkinPanel />
         </div>
 
-        <div className="order-1 lg:sticky lg:top-4 lg:order-2 lg:h-[calc(100dvh-110px)]">
+        <div className="order-1 md:sticky md:top-4 md:order-2 md:row-span-2 md:h-[calc(100dvh-110px)] lg:row-span-1">
           <MirrorStage />
         </div>
 
-        <div className="order-3 flex flex-col gap-4">
+        <div className="order-3 flex flex-col gap-4 md:col-start-1 lg:col-start-auto">
           <section className="rounded-2xl border border-line bg-paper p-4">
             <h2 className="tag-label mb-3">Dressing for</h2>
             <div className="flex flex-wrap gap-1.5">
@@ -94,7 +93,8 @@ export default function Studio() {
                   type="button"
                   onClick={() => {
                     setOccasion(o);
-                    if (stage.phase === 'done' && verdictStatus !== 'running') void requestVerdict();
+                    setCustom('');
+                    if (stage.phase === 'done') void requestVerdict();
                   }}
                   aria-pressed={occasion === o}
                   className={`rounded-full border px-3 py-1.5 text-xs transition ${
@@ -113,7 +113,7 @@ export default function Studio() {
                 e.preventDefault();
                 if (custom.trim()) {
                   setOccasion(custom.trim());
-                  if (stage.phase === 'done' && verdictStatus !== 'running') void requestVerdict();
+                  if (stage.phase === 'done') void requestVerdict();
                 }
               }}
             >
@@ -121,6 +121,7 @@ export default function Studio() {
                 value={custom}
                 onChange={(e) => setCustom(e.target.value)}
                 placeholder="or type your own…"
+                aria-label="Your own occasion"
                 className="min-w-0 flex-1 rounded-full border border-line bg-transparent px-3 py-1.5 text-xs outline-none focus:border-sage-deep"
               />
               <button type="submit" className="rounded-full border border-line px-3 py-1.5 text-xs hover:border-ink/40">

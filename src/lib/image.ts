@@ -14,6 +14,18 @@ function toDataURL(canvas: HTMLCanvasElement, quality = 0.92): string {
   return canvas.toDataURL('image/jpeg', quality);
 }
 
+/** A canvas ready for JPEG output: at least 1px each way, and painted white so
+ * transparent PNG areas don't turn black. */
+function whiteCanvas(width: number, height: number): [HTMLCanvasElement, CanvasRenderingContext2D] {
+  const canvas = document.createElement('canvas');
+  canvas.width = Math.max(1, Math.round(width));
+  canvas.height = Math.max(1, Math.round(height));
+  const ctx = canvas.getContext('2d')!;
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  return [canvas, ctx];
+}
+
 export function base64Of(dataUrl: string): string {
   return dataUrl.replace(/^data:[^;]+;base64,/, '');
 }
@@ -32,10 +44,8 @@ export async function fileToDataURL(file: File | Blob, maxSide = 2000): Promise<
 export async function resizeDataURL(dataUrl: string, maxSide: number, quality = 0.92): Promise<string> {
   const img = await loadImage(dataUrl);
   const scale = Math.min(1, maxSide / Math.max(img.width, img.height));
-  const canvas = document.createElement('canvas');
-  canvas.width = Math.round(img.width * scale);
-  canvas.height = Math.round(img.height * scale);
-  canvas.getContext('2d')!.drawImage(img, 0, 0, canvas.width, canvas.height);
+  const [canvas, ctx] = whiteCanvas(img.width * scale, img.height * scale);
+  ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
   return toDataURL(canvas, quality);
 }
 
@@ -68,12 +78,12 @@ export async function cropByBox(
   w = Math.min(img.width - x, w + pad * 2);
   h = Math.min(img.height - y, h + pad * 2);
 
+  // Upscale small crops, but keep the long side within what canvases allow
+  // (a thin crop like a belt would otherwise become 560x40000).
   const minShort = 560;
-  const scale = Math.max(1, minShort / Math.min(w, h));
-  const canvas = document.createElement('canvas');
-  canvas.width = Math.round(w * scale);
-  canvas.height = Math.round(h * scale);
-  const ctx = canvas.getContext('2d')!;
+  const maxLong = 2048;
+  const scale = Math.max(1, Math.min(minShort / Math.min(w, h), maxLong / Math.max(w, h)));
+  const [canvas, ctx] = whiteCanvas(w * scale, h * scale);
   ctx.imageSmoothingQuality = 'high';
   ctx.drawImage(img, x, y, w, h, 0, 0, canvas.width, canvas.height);
   return toDataURL(canvas);

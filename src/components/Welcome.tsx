@@ -6,11 +6,12 @@ import { urlToDataURL } from '../lib/image';
 import PhotoSlot from './PhotoSlot';
 
 export default function Welcome() {
-  const { setTwin, setSelfie } = useStore();
+  const { setTwin, setSelfie, showNotice } = useStore();
   const [mode, setMode] = useState<'hero' | 'setup'>('hero');
   const [twinDraft, setTwinDraft] = useState<string | null>(null);
   const [selfieDraft, setSelfieDraft] = useState<string | null>(null);
   const [loadingDemo, setLoadingDemo] = useState(false);
+  const [entering, setEntering] = useState(false);
 
   async function startDemo() {
     setLoadingDemo(true);
@@ -21,25 +22,36 @@ export default function Welcome() {
       ]);
       setSelfie(selfie);
       await setTwin(person); // setting the twin last flips App into the studio
+    } catch {
+      showNotice('The demo photos could not be loaded — please try again.');
     } finally {
       setLoadingDemo(false);
     }
   }
 
   async function finishSetup(twin: string) {
+    // One entry per click: React disables the button before a double-click's
+    // second click lands, so the photo is not uploaded twice.
+    setEntering(true);
     if (selfieDraft) setSelfie(selfieDraft);
     await setTwin(twin);
   }
 
+  // The photo step is compact so its buttons fit Anna's smallest window (900x620).
+  const setup = mode === 'setup';
   return (
     <main className="flex min-h-dvh flex-col bg-porcelain lg:flex-row">
       {/* Copy column */}
-      <section className="flex flex-1 flex-col justify-center px-8 py-16 sm:px-14 lg:px-20">
-        <p className="tag-label mb-6">Your fitting room, everywhere</p>
-        <h1 className="font-display text-[17vw] leading-[0.9] font-medium tracking-tight sm:text-8xl lg:text-[7.5rem]">
+      <section className={`flex flex-1 flex-col justify-center px-8 sm:px-14 lg:px-20 ${setup ? 'py-8' : 'py-16'}`}>
+        <p className={`tag-label ${setup ? 'mb-3' : 'mb-6'}`}>Your fitting room, everywhere</p>
+        <h1
+          className={`font-display leading-[0.9] font-medium tracking-tight ${
+            setup ? 'text-6xl lg:text-7xl' : 'text-[17vw] sm:text-8xl lg:text-[7.5rem]'
+          }`}
+        >
           Any<span className="italic text-sage-deep">wear</span>
         </h1>
-        <p className="mt-8 max-w-md text-lg font-light text-ink-soft">
+        <p className={`max-w-md font-light text-ink-soft ${setup ? 'mt-4 text-base' : 'mt-8 text-lg'}`}>
           Screenshot any look, anywhere — see it on your own body in seconds, judged honestly for your skin, your
           colors, and your day.
         </p>
@@ -63,7 +75,7 @@ export default function Welcome() {
             </button>
           </div>
         ) : (
-          <div className="mt-10 max-w-md">
+          <div className="mt-6 max-w-sm">
             <div className="grid grid-cols-2 gap-4">
               <PhotoSlot
                 label="Full-body photo · required"
@@ -82,7 +94,7 @@ export default function Welcome() {
               <button
                 type="button"
                 onClick={() => finishSetup(twinDraft!)}
-                disabled={!twinDraft}
+                disabled={!twinDraft || entering}
                 className="rounded-full bg-sage-deep px-7 py-3.5 text-sm font-medium text-white transition hover:bg-ink disabled:cursor-not-allowed disabled:opacity-40"
               >
                 Enter the fitting room
