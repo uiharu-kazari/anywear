@@ -5,7 +5,7 @@ import { useRef, useState } from 'react';
  * right shows "in it", and the handle sits exactly under the pointer. Both
  * images are full-size absolute layers; the before layer is clipped with
  * clip-path so there is no width math and no ref-dependent first render. */
-export default function BeforeAfter(props: { before: string; after: string; altAfter: string }) {
+export default function BeforeAfter(props: { before: string; after: string; altAfter: string; onAfterError?: () => void }) {
   const [pos, setPos] = useState(28);
   const ref = useRef<HTMLDivElement>(null);
 
@@ -26,7 +26,7 @@ export default function BeforeAfter(props: { before: string; after: string; altA
       onPointerMove={(e) => e.buttons === 1 && fromPointer(e.clientX)}
     >
       {/* base layer: the try-on result */}
-      <img src={props.after} alt={props.altAfter} className="absolute inset-0 h-full w-full object-contain" />
+      <img src={props.after} alt={props.altAfter} className="absolute inset-0 h-full w-full object-contain" onError={props.onAfterError} />
       {/* top layer: the original photo, clipped to the left of the divider */}
       <img
         src={props.before}

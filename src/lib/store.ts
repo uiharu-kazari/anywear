@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
-import { IS_ANNA, friendlyAnnaError } from './anna';
+import { IS_ANNA, friendlyAnnaError, knownAnnaProblem } from './anna';
 import { appStorage } from './persist';
 import {
   annaApi,
@@ -27,7 +27,8 @@ export type StagePhase =
   | { phase: 'pick'; screenshot: string; garments: DetectedGarment[] }
   | { phase: 'running'; garment: GarmentPick }
   // entryId: the lookbook entry this look is saved as; every verdict for it updates that entry.
-  | { phase: 'done'; garment: GarmentPick; result: string; resultUrl: string; entryId: string }
+  // sameTwin: the look was made from the current full-body photo (so a before/after compare makes sense).
+  | { phase: 'done'; garment: GarmentPick; result: string; resultUrl: string; entryId: string; sameTwin: boolean }
   | { phase: 'error'; message: string; screenshot?: string };
 
 export interface LookbookEntry {
@@ -41,6 +42,7 @@ export interface LookbookEntry {
   result: string;
   occasion: string;
   verdict: StylistVerdict | null;
+  twinId?: string | null; // which full-body photo the look was made from
 }
 
 interface SkinState {
@@ -49,11 +51,13 @@ interface SkinState {
   output: SkinOutput[];
   brief: SkinBrief | null;
   briefStatus: 'idle' | 'running' | 'done' | 'error';
+  briefError?: string; // a known cause (e.g. out of credits), shown with Retry
 }
 
 interface AnywearState {
   twinPhoto: string | null; // stored downscaled dataURL
   twinFileId: string | null; // web: YouCam file_id (~30 days) · Anna: durable upload r2_key
+  twinId: string | null; // identifies the current full-body photo (lookbook entries refer to it)
   selfiePhoto: string | null;
   skin: SkinState;
   occasion: string;
@@ -62,6 +66,7 @@ interface AnywearState {
   verdictStatus: 'idle' | 'running' | 'done' | 'error';
   verdictSeq: number; // monotonic; a returning verdict applies only if it is latest
   verdictOccasion: string | null; // the occasion the shown verdict was asked for
+  verdictError: string | null; // a known cause of a failed verdict (e.g. out of credits)
   lookbook: LookbookEntry[];
   notice: string | null; // a short message for the user (e.g. an unreadable file)
 
@@ -165,6 +170,7 @@ export const useStore = create<AnywearState>()(
     (set, get) => ({
       twinPhoto: null,
       twinFileId: null,
+      twinId: null,
       selfiePhoto: null,
       skin: initialSkin,
       occasion: 'a regular day out',
@@ -173,6 +179,7 @@ export const useStore = create<AnywearState>()(
       verdictStatus: 'idle',
       verdictSeq: 0,
       verdictOccasion: null,
+      verdictError: null,
       lookbook: [],
       notice: null,
 
@@ -186,6 +193,7 @@ export const useStore = create<AnywearState>()(
           verdictSeq: s.verdictSeq + 1,
           twinPhoto: stored,
           twinFileId: null,
+          twinId: NEW_ID(),
           stage: { phase: 'empty' },
           verdict: null,
           verdictStatus: 'idle',
@@ -249,15 +257,15 @@ export const useStore = create<AnywearState>()(
         skinOp++;
         const live = skinScope();
         const { output } = get().skin;
-        set((s) => ({ skin: { ...s.skin, brief: null, briefStatus: 'running' } }));
+        set((s) => ({ skin: { ...s.skin, brief: null, briefStatus: 'running', briefError: undefined } }));
         const concerns = output
           .filter((o) => typeof o.ui_score === 'number' && o.type !== 'all')
           .map((o) => ({ type: o.type, raw_score: o.raw_score ?? 0, ui_score: o.ui_score as number }));
         try {
           const { brief } = await live(api.skinBrief(concerns));
           set((s) => ({ skin: { ...s.skin, brief, briefStatus: 'done' } }));
-        } catch {
-          set((s) => ({ skin: { ...s.skin, briefStatus: 'error' } }));
+        } catch (err) {
+          set((s) => ({ skin: { ...s.skin, briefStatus: 'error', briefError: knownAnnaProblem(err) ?? undefined } }));
         }
       },
 
@@ -281,7 +289,8 @@ export const useStore = create<AnywearState>()(
             set({
               stage: {
                 phase: 'error',
-                message: 'No wearable garment found in that image — try a screenshot where the clothing is clearly visible.',
+                message:
+                  'No clothing found in that image. Anywear tries on tops, bottoms, dresses and outerwear (not shoes, bags or accessories) — try a screenshot where the clothes are clearly visible.',
                 screenshot: dataUrl,
               },
             });
@@ -349,7 +358,7 @@ export const useStore = create<AnywearState>()(
             // Anna result URLs expire in ~30 min; keep the pixels when the host
             // lets us read them, otherwise show the URL for this session.
             const result = await live(urlToDataURL(url, 1400).catch(() => url));
-            set({ stage: { phase: 'done', garment, result, resultUrl: url, entryId: NEW_ID() } });
+            set({ stage: { phase: 'done', garment, result, resultUrl: url, entryId: NEW_ID(), sameTwin: true } });
             void get().requestVerdict();
           } catch (err) {
             set({ stage: { phase: 'error', message: friendlyAnnaError(err) || 'Try-on failed.' } });
@@ -367,7 +376,7 @@ export const useStore = create<AnywearState>()(
           const st = await live(pollUntilDone(() => api.vtoStatus(taskId), { intervalMs: 3000 }));
           if (st.status !== 'success' || !st.url) throw new Error(st.error ?? 'Try-on failed.');
           const result = await live(urlToDataURL(proxied(st.url), 1400));
-          set({ stage: { phase: 'done', garment, result, resultUrl: st.url, entryId: NEW_ID() } });
+          set({ stage: { phase: 'done', garment, result, resultUrl: st.url, entryId: NEW_ID(), sameTwin: true } });
           void get().requestVerdict();
         } catch (err) {
           // A failed try-on may mean the stored twin file expired; drop it so
@@ -388,7 +397,7 @@ export const useStore = create<AnywearState>()(
         if (stage.phase !== 'done') return;
         const live = sessionScope();
         const seq = get().verdictSeq + 1;
-        set({ verdictStatus: 'running', verdict: null, verdictSeq: seq, verdictOccasion: occasion });
+        set({ verdictStatus: 'running', verdict: null, verdictSeq: seq, verdictOccasion: occasion, verdictError: null });
         let verdict: StylistVerdict | null = null;
         try {
           ({ verdict } = await live(api.verdict({
@@ -401,10 +410,10 @@ export const useStore = create<AnywearState>()(
           // A newer request (occasion change / new try-on) supersedes this one.
           if (get().verdictSeq !== seq) return;
           set({ verdict, verdictStatus: 'done' });
-        } catch {
+        } catch (err) {
           if (get().verdictSeq !== seq) return;
           // Still keep the look in the book, just without a verdict.
-          set({ verdictStatus: 'error' });
+          set({ verdictStatus: 'error', verdictError: knownAnnaProblem(err) });
         }
         // Save the look under its entry id (fixed when the try-on finished), so
         // re-judging (another occasion, "Ask again", a reopened look) updates
@@ -426,6 +435,8 @@ export const useStore = create<AnywearState>()(
           garmentLabel: stage.garment.label,
           garmentCategory: stage.garment.category,
           garmentDescription: stage.garment.description,
+          // A reopened look keeps the photo it was made from; a fresh one uses the current photo.
+          twinId: first ? first.twinId : get().twinId,
           garmentThumb: thumb,
           result: resultSmall,
           occasion,
@@ -449,11 +460,13 @@ export const useStore = create<AnywearState>()(
             result: entry.result,
             resultUrl: '',
             entryId: entry.id,
+            sameTwin: entry.twinId != null && entry.twinId === s.twinId,
           },
           verdict: entry.verdict,
           // A look saved without a verdict offers "Ask again".
           verdictStatus: entry.verdict ? 'done' : 'error',
           verdictOccasion: entry.occasion,
+          verdictError: null,
           verdictSeq: s.verdictSeq + 1,
         }));
       },
@@ -468,6 +481,7 @@ export const useStore = create<AnywearState>()(
         set({
           twinPhoto: null,
           twinFileId: null,
+          twinId: null,
           selfiePhoto: null,
           skin: initialSkin,
           stage: { phase: 'empty' },
@@ -491,6 +505,7 @@ export const useStore = create<AnywearState>()(
       partialize: (s) => ({
         twinPhoto: s.twinPhoto,
         twinFileId: s.twinFileId,
+        twinId: s.twinId,
         selfiePhoto: s.selfiePhoto,
         occasion: s.occasion,
         lookbook: s.lookbook,

@@ -18,6 +18,8 @@ export default function MirrorStage() {
   // The pick screenshot's width/height, so it (and its boxes) can be scaled to
   // whatever room the garment list leaves.
   const [ratio, setRatio] = useState(1);
+  // A saved look whose image can no longer be loaded (Anna image links expire).
+  const [brokenResult, setBrokenResult] = useState<string | null>(null);
 
   async function onFiles(files: FileList | null) {
     const dataUrl = await readImage(files?.[0]);
@@ -206,8 +208,34 @@ export default function MirrorStage() {
 
       {stage.phase === 'done' && twinPhoto && (
         <div className="flex flex-1 flex-col">
-          <div className="min-h-0 flex-1">
-            <BeforeAfter before={twinPhoto} after={stage.result} altAfter={`You wearing ${stage.garment.label}`} />
+          <div className="relative min-h-0 flex-1">
+            {stage.result === brokenResult ? (
+              <div className="flex h-full flex-col items-center justify-center gap-2 p-8 text-center">
+                <p className="font-display text-2xl">This look's image has expired</p>
+                <p className="max-w-sm text-sm text-ink-soft">Try the garment on again to see it.</p>
+              </div>
+            ) : stage.sameTwin ? (
+              <BeforeAfter
+                before={twinPhoto}
+                after={stage.result}
+                altAfter={`You wearing ${stage.garment.label}`}
+                onAfterError={() => setBrokenResult(stage.result)}
+              />
+            ) : (
+              // Made from an earlier full-body photo: comparing it with the
+              // current photo would put two different bodies side by side.
+              <>
+                <img
+                  src={stage.result}
+                  alt={`You wearing ${stage.garment.label}`}
+                  className="absolute inset-0 h-full w-full object-contain"
+                  onError={() => setBrokenResult(stage.result)}
+                />
+                <span className="tag-label absolute top-3 left-3 rounded-full bg-ink/55 px-2.5 py-1 !text-white/90">
+                  from an earlier photo
+                </span>
+              </>
+            )}
           </div>
           <div className="flex items-center justify-between gap-3 border-t border-line px-5 py-3">
             <div className="flex min-w-0 items-center gap-3">

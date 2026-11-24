@@ -121,8 +121,9 @@ export async function llmJSON<T>(opts: {
       return opts.parse(extractJSON(text));
     } catch (err) {
       lastErr = err;
-      // Quota / permission / non-vision model errors won't fix themselves on retry.
-      if (annaErrorCode(err)) break;
+      // Quota / permission / non-vision model errors and timeouts won't fix
+      // themselves on an immediate retry (and a retry would be billed again).
+      if (annaErrorCode(err) || isTimeout(err)) break;
     }
   }
   throw lastErr;
@@ -173,13 +174,27 @@ export async function generateImage(args: { prompt: string; referenceUrls: strin
   return url;
 }
 
-export function friendlyAnnaError(err: unknown): string {
+// The SDK's own timeout ("RPC llm.complete timed out after 90000ms …").
+const isTimeout = (err: unknown) => err instanceof Error && /RPC .* timed out/i.test(err.message);
+
+/** A plain sentence for Anna errors a user can actually hit, or null when the
+ * error is not one of those (callers then show their own message). */
+export function knownAnnaProblem(err: unknown): string | null {
   const code = annaErrorCode(err);
   if (code) {
     if (/QUOTA/i.test(code)) return 'You are out of Anna credits — top up in Anna and try again.';
     if (/CONTENT_REJECTED/i.test(code)) return 'The image model declined this one — try a different photo or garment.';
     if (/VISION/i.test(code)) return 'Your selected Anna model cannot read images — pick a vision model (e.g. Gemini) in Anna settings.';
+    if (/RATE/i.test(code)) return 'Anna is busy right now — wait a moment and try again.';
+    if (/NOT_GRANTED|PERMISSION/i.test(code)) return 'Anna did not allow this request — close and reopen Anywear, then try again.';
+    if (/^IMAGE_/i.test(code)) return "The image model couldn't make this one — please try again.";
   }
+  if (isTimeout(err)) return 'Anna took too long to answer — please try again.';
+  if (err instanceof Error && /no JSON/i.test(err.message)) return "The AI couldn't make sense of that one — try a different photo.";
+  return null;
+}
+
+export function friendlyAnnaError(err: unknown): string {
   // Everything we await rejects with an Error; keep a fallback for anything else.
-  return err instanceof Error ? err.message : /* istanbul ignore next -- @preserve */ 'Something went wrong.';
+  return knownAnnaProblem(err) ?? (err instanceof Error ? err.message : /* istanbul ignore next -- @preserve */ 'Something went wrong.');
 }

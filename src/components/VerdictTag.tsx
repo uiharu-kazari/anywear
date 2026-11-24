@@ -7,7 +7,7 @@ const VERDICT_META = {
 } as const;
 
 export default function VerdictTag() {
-  const { stage, verdict, verdictStatus, verdictOccasion, occasion, skin, requestVerdict } = useStore();
+  const { stage, verdict, verdictStatus, verdictOccasion, verdictError, occasion, skin, requestVerdict } = useStore();
 
   if (stage.phase !== 'done' && verdictStatus === 'idle') {
     return (
@@ -41,7 +41,7 @@ export default function VerdictTag() {
       <div className="rounded-2xl border border-line bg-paper p-5">
         <p className="tag-label mb-2">stylist verdict</p>
         <p className="text-xs text-ink-soft">
-          The stylist stepped away.{' '}
+          {verdictError ?? 'The stylist stepped away.'}{' '}
           <button type="button" onClick={requestVerdict} className="text-ink underline underline-offset-2">
             Ask again
           </button>

@@ -105,13 +105,13 @@ test.describe('skin today', () => {
     // No JSON at all, twice (retry once with a stricter reminder).
     host.llm.skin = () => llmText('Sorry, I cannot see a face.');
     await ui.getByRole('button', { name: 'Read my skin' }).click();
-    await expect(errorBox).toContainText('Model reply contained no JSON.');
+    await expect(errorBox).toContainText("The AI couldn't make sense of that one");
     expect(host.count('llm.complete')).toBe(2);
 
     // An opening brace but never a closing one.
     host.llm.skin = () => llmText('scores: { "redness": 70');
     await ui.getByRole('button', { name: 'Retry' }).click();
-    await expect(errorBox).toContainText('Model reply contained no JSON.');
+    await expect(errorBox).toContainText("The AI couldn't make sense of that one");
 
     // Too few concerns readable.
     host.llm.skin = () => llmText(JSON.stringify({ scores: { redness: 70, moisture: 'n/a' } }));
@@ -209,7 +209,7 @@ test.describe('screenshots → garments', () => {
 
     host.llm.garments = () => llmText('[]');
     await ui.getByRole('button', { name: 'Street-style photo' }).click();
-    await expect(ui.getByText('No wearable garment found', { exact: false })).toBeVisible();
+    await expect(ui.getByText('No clothing found in that image', { exact: false })).toBeVisible();
     await ui.getByRole('button', { name: 'Start over' }).click();
 
     host.llm.garments = () => reject(undefined, '');
@@ -219,12 +219,12 @@ test.describe('screenshots → garments', () => {
 
     host.llm.garments = () => llmText('Detected: [] (nothing wearable)');
     await ui.getByRole('button', { name: 'Street-style photo' }).click();
-    await expect(ui.getByText('No wearable garment found', { exact: false })).toBeVisible();
+    await expect(ui.getByText('No clothing found in that image', { exact: false })).toBeVisible();
     await ui.getByRole('button', { name: 'Start over' }).click();
 
     host.llm.garments = () => llmText('{"verdict": "not a list"}');
     await ui.getByRole('button', { name: 'Street-style photo' }).click();
-    await expect(ui.getByText('No wearable garment found', { exact: false })).toBeVisible();
+    await expect(ui.getByText('No clothing found in that image', { exact: false })).toBeVisible();
     await ui.getByRole('button', { name: 'Start over' }).click();
 
     // Only well-formed garments survive; a wrapped list is accepted.
@@ -269,7 +269,7 @@ test.describe('screenshots → garments', () => {
     expect(host.count('llm.complete')).toBe(0);
 
     await chooser.setInputFiles(sample('garment_dress.png'));
-    await expect(ui.getByText('No wearable garment found', { exact: false })).toBeVisible();
+    await expect(ui.getByText('No clothing found in that image', { exact: false })).toBeVisible();
     await ui.getByRole('button', { name: 'Start over' }).click();
 
     // Drag over (highlight), leave, then drop a file.
@@ -289,7 +289,7 @@ test.describe('screenshots → garments', () => {
     await expect(zone).toHaveClass(/ring-2/);
     await drag('drop');
     await expect(zone).not.toHaveClass(/ring-2/);
-    await expect(ui.getByText('No wearable garment found', { exact: false })).toBeVisible();
+    await expect(ui.getByText('No clothing found in that image', { exact: false })).toBeVisible();
     await ui.getByRole('button', { name: 'Start over' }).click();
     expect(host.count('llm.complete')).toBe(2);
 
@@ -314,7 +314,7 @@ test.describe('screenshots → garments', () => {
       img.items.add(new File([blob], 'look.png', { type: 'image/png' }));
       window.dispatchEvent(new ClipboardEvent('paste', { clipboardData: img }));
     }, null);
-    await expect(ui.getByText('No wearable garment found', { exact: false })).toBeVisible();
+    await expect(ui.getByText('No clothing found in that image', { exact: false })).toBeVisible();
   });
 });
 
@@ -397,8 +397,12 @@ test.describe('try-on', () => {
     await anna.ui.getByLabel('Full-body photo · required').setInputFiles(fixture('landscape.jpg'));
     await anna.ui.getByRole('button', { name: 'Enter the fitting room' }).click();
 
+    // The CDN refuses both the App's fetch and the image itself (as when an
+    // Anna image link has expired).
     host.cdnStatus = 403;
-    await tryOnBlazer(anna);
+    anna.host.llm.garments = () => llmText(JSON.stringify(GARMENT_ONE));
+    await anna.ui.getByRole('button', { name: 'Blazer product shot' }).click();
+    await expect.poll(() => host.count('image.generate')).toBe(1);
     const gen = host.calls.filter((c) => c.method === 'generate').at(-1)!.args;
     // A landscape twin still gets a full-length portrait try-on (a wide frame
     // made the model zoom in on the torso and drop the head and legs).
@@ -410,13 +414,18 @@ test.describe('try-on', () => {
     await expect(anna.ui.getByText('87/100')).toBeVisible();
     const verdictCall = host.calls.filter((c) => c.method === 'complete').at(-1)!.args;
     expect(verdictCall.messages[0].content[0]).toEqual({ type: 'image', url: 'https://cdn.test/result.jpg' });
-    await expect(anna.ui.getByRole('img', { name: 'Try-on: Camel blazer' })).toHaveAttribute('src', 'https://cdn.test/result.jpg');
+    // An image that can't be shown says so, on the stage and in the lookbook.
+    await expect(anna.ui.getByText("This look's image has expired")).toBeVisible();
+    const book = anna.ui.getByRole('region', { name: 'Lookbook' });
+    await expect(book.getByText('image expired')).toBeVisible();
 
     // A CDN reply that is not an image also falls back to the URL.
     host.cdnStatus = 200;
     host.cdnFile = fixture('broken.png');
     await anna.ui.getByRole('button', { name: 'Try another' }).click();
-    await tryOnBlazer(anna);
+    await anna.ui.getByRole('button', { name: 'Blazer product shot' }).click();
+    await expect(anna.ui.getByText("This look's image has expired")).toBeVisible();
+    await expect(book.getByText('image expired')).toHaveCount(2);
   });
 
   test('replacing the twin mid-flight keeps the newer photo and drops the old try-on', async ({ anna, host }) => {
@@ -960,5 +969,96 @@ test.describe('review hardening', () => {
     await expect(ui.getByText('Drop any screenshot')).toBeVisible();
     await anna.page.waitForTimeout(300);
     expect(host.count('upload.inline')).toBe(1);
+  });
+
+  test('Anna errors a reviewer can hit read as plain sentences', async ({ anna, host }) => {
+    await enterStudio(anna);
+    const ui = anna.ui;
+    host.llm.garments = () => llmText(JSON.stringify(GARMENT_ONE));
+    const cases: [string | undefined, string, string][] = [
+      ['APP_RATE_LIMITED', 'Too many image requests', 'Anna is busy right now'],
+      ['APP_ERR_NOT_GRANTED', 'This app is not allowed to generate images', 'Anna did not allow this request'],
+      ['IMAGE_SIZE_UNSUPPORTED', 'size 688x1024 is not supported', "The image model couldn't make this one"],
+      [undefined, 'RPC image.generate timed out after 180000ms (pass { timeoutMs } as the 2nd arg to override)', 'Anna took too long to answer'],
+    ];
+    for (const [code, raw, plain] of cases) {
+      host.on('image.generate', () => reject(code, raw));
+      await ui.getByRole('button', { name: 'Blazer product shot' }).click();
+      await expect(ui.getByText(plain, { exact: false })).toBeVisible();
+      await expect(ui.getByText(raw)).toHaveCount(0);
+      await ui.getByRole('button', { name: 'Start over' }).click();
+    }
+    host.off('image.generate');
+
+    // A detection timeout is not retried (a retry would be billed again).
+    const before = host.count('llm.complete');
+    host.llm.garments = () => reject(undefined, 'RPC llm.complete timed out after 90000ms (pass { timeoutMs } as the 2nd arg to override)');
+    await ui.getByRole('button', { name: 'Blazer product shot' }).click();
+    await expect(ui.getByText('Anna took too long to answer', { exact: false })).toBeVisible();
+    expect(host.count('llm.complete')).toBe(before + 1);
+    await ui.getByRole('button', { name: 'Start over' }).click();
+
+    // Out of credits on the verdict and on the skin brief says so.
+    host.llm.garments = () => llmText(JSON.stringify(GARMENT_ONE));
+    host.llm.verdict = () => reject('APP_ERR_QUOTA_EXCEEDED', 'quota exceeded');
+    await tryOnBlazer(anna);
+    await expect(ui.getByText('You are out of Anna credits', { exact: false })).toBeVisible();
+    await expect(ui.getByRole('button', { name: 'Ask again' })).toBeVisible();
+    host.llm.brief = () => reject('APP_ERR_QUOTA_EXCEEDED', 'quota exceeded');
+    await ui.getByRole('button', { name: 'Read my skin' }).click();
+    await expect(ui.locator('section', { hasText: 'Skin today' }).getByText('You are out of Anna credits', { exact: false })).toBeVisible();
+  });
+
+  test('a look made from an earlier full-body photo is not compared with the new one', async ({ anna, host }) => {
+    await enterStudio(anna);
+    const ui = anna.ui;
+    const book = ui.getByRole('region', { name: 'Lookbook' });
+    await tryOnBlazer(anna);
+    await expect(ui.getByText('87/100')).toBeVisible();
+    // Same photo: before/after compare.
+    await ui.getByRole('button', { name: 'Try another' }).click();
+    await book.getByRole('button', { name: /Camel blazer/ }).click();
+    await expect(ui.getByLabel('Reveal the try-on result')).toHaveCount(1);
+
+    // A look whose image can't load any more (CDN refuses it) on a new photo.
+    host.cdnStatus = 403;
+    await ui.getByRole('button', { name: 'Try another' }).click();
+    await ui.getByRole('button', { name: 'Blazer product shot' }).click();
+    await expect(ui.getByText("This look's image has expired")).toBeVisible();
+    await expect(book.getByRole('button')).toHaveCount(2);
+
+    // One more unloadable look, under another link.
+    host.on('image.generate', () => ok({ images: [{ url: 'https://cdn.test/other.jpg' }] }));
+    await ui.getByRole('button', { name: 'Try another' }).click();
+    await ui.getByRole('button', { name: 'Blazer product shot' }).click();
+    await expect(book.getByRole('button')).toHaveCount(3);
+    host.off('image.generate');
+
+    // New full-body photo: older looks show alone, labelled.
+    await ui.locator('section', { hasText: 'Your twin' }).locator('input[type=file]').setInputFiles(fixture('landscape.jpg'));
+    await expect(ui.getByText('Drop any screenshot')).toBeVisible();
+    const looks = book.getByRole('button', { name: /Camel blazer/ });
+    await looks.last().click();
+    await expect(ui.getByText('from an earlier photo')).toBeVisible();
+    await expect(ui.getByLabel('Reveal the try-on result')).toHaveCount(0);
+    await expect(ui.getByRole('img', { name: 'You wearing Camel blazer' })).toBeVisible();
+    // An earlier-photo look whose image no longer loads says so.
+    await looks.nth(1).click();
+    await expect(ui.getByText("This look's image has expired")).toBeVisible();
+  });
+
+  test('while the demo loads, "Use my own photos" waits', async ({ anna, page }) => {
+    await anna.open();
+    const ui = anna.ui;
+    const held = gate();
+    await page.route('**/samples/person.png', async (r) => {
+      await held.wait();
+      await r.fallback();
+    });
+    await ui.getByRole('button', { name: 'Step in with the demo persona' }).click();
+    await expect(ui.getByRole('button', { name: 'Setting up…' })).toBeDisabled();
+    await expect(ui.getByRole('button', { name: 'Use my own photos' })).toBeDisabled();
+    held.open();
+    await expect(ui.getByText('Drop any screenshot')).toBeVisible();
   });
 });

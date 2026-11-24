@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { useStore } from '../lib/store';
 
 const GLYPH = { wear_it: '✓', maybe: '≈', skip: '✕' } as const;
@@ -5,10 +6,11 @@ const COLOR = { wear_it: 'text-sage-deep', maybe: 'text-ochre', skip: 'text-bric
 
 export default function Lookbook() {
   const { lookbook, openLookbookEntry } = useStore();
+  const [broken, setBroken] = useState<Set<string>>(() => new Set());
   if (!lookbook.length) return null;
   return (
     <section aria-label="Lookbook">
-      <h2 className="tag-label mb-2">lookbook</h2>
+      <h2 className="tag-label mb-2">lookbook · your latest 10 looks</h2>
       <div className="flex gap-3 overflow-x-auto pb-2">
         {lookbook.map((e) => (
           <button
@@ -19,7 +21,18 @@ export default function Lookbook() {
             title={`${e.garmentLabel} — ${e.occasion}`}
           >
             <span className="block overflow-hidden rounded-xl border border-line transition group-hover:border-sage">
-              <img src={e.result} alt={`Try-on: ${e.garmentLabel}`} className="aspect-[3/4] w-full bg-ink/5 object-contain" />
+              {broken.has(e.id) ? (
+                <span className="flex aspect-[3/4] w-full items-center justify-center bg-ink/5 p-2 text-center text-[10px] text-ink-soft">
+                  image expired
+                </span>
+              ) : (
+                <img
+                  src={e.result}
+                  alt={`Try-on: ${e.garmentLabel}`}
+                  className="aspect-[3/4] w-full bg-ink/5 object-contain"
+                  onError={() => setBroken((b) => new Set(b).add(e.id))}
+                />
+              )}
             </span>
             <span className="mt-1 flex items-center gap-1">
               {e.verdict && (

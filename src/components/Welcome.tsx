@@ -52,7 +52,7 @@ export default function Welcome() {
           Any<span className="italic text-sage-deep">wear</span>
         </h1>
         <p className={`max-w-md font-light text-ink-soft ${setup ? 'mt-4 text-base' : 'mt-8 text-lg'}`}>
-          Screenshot any look, anywhere — see it on your own body in seconds, judged honestly for your skin, your
+          Screenshot any look, anywhere — see it on your own body, judged honestly for your skin, your
           colors, and your day.
         </p>
 
@@ -69,6 +69,7 @@ export default function Welcome() {
             <button
               type="button"
               onClick={() => setMode('setup')}
+              disabled={loadingDemo}
               className="rounded-full border border-ink/25 px-7 py-3.5 text-sm font-medium transition hover:border-ink"
             >
               Use my own photos
@@ -119,7 +120,9 @@ export default function Welcome() {
         <img
           src={SAMPLES + 'hero_result.jpg'}
           alt="A virtual try-on result: the demo persona wearing a sage satin slip dress"
-          className="absolute inset-0 h-full w-full object-cover object-top"
+          // Narrow windows stack this under the copy in a short box: show the
+          // whole look there rather than a crop of the face.
+          className="absolute inset-0 h-full w-full bg-[#c9c9c9] object-contain lg:object-cover lg:object-top"
         />
         <div className="absolute inset-x-0 bottom-0 flex justify-end bg-gradient-to-t from-ink/45 to-transparent px-6 pt-16 pb-4">
           <p className="tag-label !text-white/80">A real Anywear try-on · sage slip dress, from a screenshot</p>

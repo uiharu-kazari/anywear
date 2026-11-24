@@ -171,7 +171,7 @@ export default function SkinPanel() {
           {skin.briefStatus === 'running' && <p className="text-xs text-ink-soft">Writing today's brief…</p>}
           {skin.briefStatus === 'error' && (
             <p className="text-xs text-ink-soft">
-              Today's brief didn't come through.{' '}
+              {skin.briefError ?? "Today's brief didn't come through."}{' '}
               <button type="button" onClick={writeBrief} className="text-ink underline underline-offset-2">
                 Retry
               </button>
